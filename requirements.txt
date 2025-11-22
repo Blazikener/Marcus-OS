@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+motor
+pydantic
+python-dotenv
+celery
+pillow
+rabbitmq-client  # not required, just run rabbitmq server; celery depends on kombu

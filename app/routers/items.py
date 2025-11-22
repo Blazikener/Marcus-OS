@@ -1,14 +1,16 @@
 # app/routers/items.py
 # mainly for createing the basic fast api endpoints for file modularity its been shifter to items.py
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form,Response
+# app/routers/items.py
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
 from fastapi.responses import StreamingResponse
 from typing import Optional
-from app.core.db import getdb, get_gridfs_bucket
+from app.core.db import get_db_dep, get_gridfs_bucket
 from app.models.schemas import ItemIn, ItemOut
-from app.crud.crud_items import Create_item, save_image, get_latest_image_meta, open_image_stream
+from app.crud.crud_items import Create_item, save_image, get_latest_image_meta, open_image_stream, update_item_fields
 from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorGridFSBucket
-
+from app.Celery.image_tasks import process_image
+import json
 
 router = APIRouter(prefix="/items", tags=["items"])
 
@@ -18,7 +20,7 @@ async def create_item_endpoint(
     description: Optional[str] = Form(None),
     metadata: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
-    db: AsyncIOMotorDatabase = Depends(getdb),
+    db: AsyncIOMotorDatabase = Depends(get_db_dep),
     fs: AsyncIOMotorGridFSBucket = Depends(get_gridfs_bucket),
 ):
     """
@@ -59,7 +61,6 @@ async def create_item_endpoint(
     item_data = {"title": title, "description": description}
     if metadata:
         try:
-            import json
             item_data["metadata"] = json.loads(metadata)
         except Exception:
             item_data["metadata"] = {"raw": metadata}
@@ -73,18 +74,25 @@ async def create_item_endpoint(
         image_id = await save_image(fs, contents, image.filename, image.content_type)
         item_data["image_id"] = image_id
 
+    # create DB document (ensure Create_item in crud sets created_at)
     saved = await Create_item(db, item_data)
+
+    # enqueue Celery task (fire-and-forget)
+    try:
+        async_result = process_image.delay(saved["id"])
+        # store task id and status optionally
+        if async_result and async_result.id:
+            await update_item_fields(db, saved["id"], {"task_id": async_result.id, "processing_status": "queued"})
+    except Exception as e:
+        # log enqueue error but don't fail the request
+        print("Failed to enqueue image processing task:", e)
+
     return ItemOut(**saved)
 
-# @router.get("/{item_id}", response_model=ItemOut)
-# async def get_item_endpoint(item_id: str, db: AsyncIOMotorDatabase = Depends(getdb)):
-#     doc = await get_item(db, item_id)
-#     if not doc:
-#         raise HTTPException(status_code=404, detail="Not found")
-#     return ItemOut(**doc)
 
 @router.get("/latest-image-stream")
-async def latest_image_stream(db: AsyncIOMotorDatabase = Depends(getdb), fs: AsyncIOMotorGridFSBucket = Depends(get_gridfs_bucket)):
+async def latest_image_stream(db: AsyncIOMotorDatabase = Depends(get_db_dep), fs: AsyncIOMotorGridFSBucket = Depends(get_gridfs_bucket)):
+    
     """
     The function `latest_image_stream` retrieves the latest image from a MongoDB database and streams it
     as a response with the appropriate content type.
@@ -111,3 +119,7 @@ async def latest_image_stream(db: AsyncIOMotorDatabase = Depends(getdb), fs: Asy
     content_type = latest.get("metadata", {}).get("contentType", "image/jpeg")
     generator = open_image_stream(fs, file_id)
     return StreamingResponse(generator, media_type=content_type)
+
+
+
+    

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional, AsyncGenerator, Dict, Any
 from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorGridFSBucket
 from pymongo.errors import PyMongoError
-
+from bson import ObjectId
 
 
 
@@ -210,3 +210,14 @@ async def open_image_stream(fs: AsyncIOMotorGridFSBucket, file_id: str, chunk_si
             await stream.close()
         except Exception:
             pass
+
+
+
+
+async def update_item_fields(db: AsyncIOMotorDatabase, item_id: str, fields: Dict[str, Any]) -> bool:
+    try:
+        oid = ObjectId(item_id)
+    except Exception:
+        return False
+    res = await db.items.update_one({"_id": oid}, {"$set": fields})
+    return res.modified_count > 0

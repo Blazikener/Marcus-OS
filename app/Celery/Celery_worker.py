@@ -21,6 +21,10 @@ celery.conf.update(
     timezone="UTC",
     enable_utc=True,
 )
+
+# Import tasks to register them
+from app.Celery import image_tasks
+
 @celery.task
 def process_item(item_id):
     # Place your background task logic (e.g., DB, image work) here

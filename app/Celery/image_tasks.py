@@ -1,6 +1,6 @@
 # app/tasks/image_tasks.py
 import io
-from celery import shared_task
+from app.Celery.Celery_worker import celery
 from pymongo import MongoClient
 import gridfs
 from PIL import Image
@@ -11,7 +11,7 @@ import os
 load_dotenv()
 
 MONGO_URI = os.getenv("MONGODB_URI", "mongodb://mongo:27017")
-MONGO_DB = os.getenv("MONGODB_DB", "fastapi_demo")
+MONGO_DB = os.getenv("MONGODB_DB", "ZEKA")
 
 client = MongoClient(MONGO_URI)
 db = client[MONGO_DB]
@@ -25,17 +25,22 @@ def _make_thumbnail_bytes(image_bytes: bytes, size=(256, 256)) -> bytes:
     im.save(out, format="JPEG", quality=85)
     return out.getvalue()
 
-@shared_task(bind=True, acks_late=True)
+@celery.task(bind=True, acks_late=True)
 def process_image(self, item_id: str):
+    print(f"[DEBUG] Starting process_image for item_id: {item_id}")
     try:
         oid = ObjectId(item_id)
-    except Exception:
+        print(f"[DEBUG] Converted to ObjectId: {oid}")
+    except Exception as e:
+        print(f"[DEBUG] Failed to convert to ObjectId: {e}")
         return {"error": "invalid item_id"}
 
     # Set processing status
-    db.items.update_one({"_id": oid}, {"$set": {"processing_status": "processing"}})
+    result = db.items.update_one({"_id": oid}, {"$set": {"processing_status": "processing"}})
+    print(f"[DEBUG] Update result - matched: {result.matched_count}, modified: {result.modified_count}")
 
     item = db.items.find_one({"_id": oid})
+    print(f"[DEBUG] Found item: {item is not None}")
     if not item:
         db.items.update_one({"_id": oid}, {"$set": {"processing_status": "not_found"}})
         return {"error": "item not found"}

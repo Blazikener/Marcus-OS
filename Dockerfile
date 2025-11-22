@@ -1,24 +1,31 @@
-# Use an official Python runtime as a parent image
+# Base image
 FROM python:3.11-slim
 
-# Set the working directory in the container
-WORKDIR /app
+# system deps for Pillow and build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libjpeg-dev \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Prevent python from writing .pyc files to disc
-ENV PYTHONDONTWRITEBYTECODE 1
-# Ensure python output is sent straight to the terminal without buffering
-ENV PYTHONUNBUFFERED 1
+# Create app user (optional)
+RUN useradd --create-home appuser
+WORKDIR /home/appuser/app
 
-# Copy the dependency requirements file
+# Copy only requirements first (for caching)
 COPY requirements.txt .
 
-# Install dependencies
+RUN python -m pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the application code into the container
-COPY ./app /app/app
+# Copy app code
+COPY ./app ./app
+COPY .env .env
 
-# Run the application
-# Gunicorn is a production-ready WSGI server. We use it to run 4 Uvicorn workers.
-# It listens on all network interfaces (0.0.0.0) on port 8000.
-CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "app.main:app", "--bind", "0.0.0.0:8000"]
+# Set user
+USER appuser
+
+ENV PYTHONUNBUFFERED=1
+
+# Default command is to run uvicorn (overridden in docker-compose for worker)
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

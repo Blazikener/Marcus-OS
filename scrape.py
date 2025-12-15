@@ -1,24 +1,24 @@
-import requests
-from bs4 import BeautifulSoup
+import selenium.webdriver as webdriver
+from selenium.webdriver.chrome.service import Service
+import time
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service
 
-url = input("Enter the URL to scrape: ")
+def scrape_website(url: str) -> str:
+    print("Launching Chrome browser...")
 
-def ensure_https(url: str) -> str:
-    if not url.startswith(("http://", "https://")):
-        return "https://" + url
-    return url
+    chrome_driver_path = "./chromedriver.exe"
+    options = webdriver.ChromeOptions()
+    driver = webdriver.Chrome(
+    service=Service(ChromeDriverManager().install()),
+    options=options)
+    try:
+        driver.get(url)
+        print(f"Successfully loaded website: {url}")
+        html = driver.page_source
+        time.sleep(10)
 
-url = ensure_https(url)
+        return html
 
-def scrape():
-    
-    response = requests.get(url)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    
-    print(soup)
-
-    with open("example.txt", "w", encoding="utf-8") as file:
-        file.write(str(soup))
-
-if __name__ == '__main__':
-    scrape()
+    finally:
+        driver.quit()

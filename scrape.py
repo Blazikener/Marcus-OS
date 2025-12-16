@@ -9,12 +9,14 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 from openai import OpenAI  
+from tenacity import retry, stop_after_attempt, wait_exponential
+
 
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY)
 MODEL_NAME = "gpt-4.1"  
-
+DRIVER_PATH = ChromeDriverManager().install()
 
 @dataclass
 class ExtractedWebsiteData:
@@ -27,7 +29,7 @@ class ExtractedWebsiteData:
     text_summary: str
     dom_structure: str
 
-
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=10))
 def scrape_website(url: str) -> str:
     print("Launching Chrome browser...")
     options = webdriver.ChromeOptions()
@@ -35,11 +37,11 @@ def scrape_website(url: str) -> str:
     options.add_argument("--start-maximized")
 
     driver = webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
+        service=Service(DRIVER_PATH),
         options=options,
     )
     try:
-        driver.get(url)
+        driver.set_page_load_timeout(120)
         driver.implicitly_wait(10)
         time.sleep(3)
         html = driver.page_source

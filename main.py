@@ -28,7 +28,7 @@ if st.button("Scrape & Generate Tests") and url:
     with st.spinner("Extracting structure & features..."):
         extracted = extract_website_intelligence(html, url)
 
-    with st.spinner("Generating test cases with OpenAI..."):
+    with st.spinner("Generating test cases"):
         tests = generate_test_cases(extracted, coverage)
 
     st.success(f"Generated {len(tests)} test cases")

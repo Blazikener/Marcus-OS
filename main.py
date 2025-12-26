@@ -1,4 +1,3 @@
-# main.py
 import streamlit as st
 from scrape import scrape_website, extract_website_intelligence, generate_test_cases
 
@@ -52,3 +51,4 @@ if st.button("Scrape & Generate Tests") and url:
             st.markdown("**Steps:**")
             for step in tc["steps"]:
                 st.markdown(f"- {step}")
+ 

@@ -39,6 +39,13 @@ class TestResult:
     error_message: Optional[str]
     page_source: Optional[str]  
 
+@dataclass
+class TestRun:
+    run_id: str
+    url: str
+    total_tests: int
+    completed: int
+    results: List[TestResult]
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=10))
 def scrape_website(url: str) -> str:
@@ -217,3 +224,4 @@ Return ONLY the JSON array, no explanation, no markdown.
     if start == -1 or end == 0:
         raise ValueError("Model did not return a JSON array")
     return json.loads(text[start:end])
+

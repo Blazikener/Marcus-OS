@@ -51,4 +51,14 @@ if st.button("Scrape & Generate Tests") and url:
             st.markdown("**Steps:**")
             for step in tc["steps"]:
                 st.markdown(f"- {step}")
- 
+    st.write("Running tests...")
+    # Save tests to file or pass directly
+    import json
+    with open("tests.json", "w") as f:
+        json.dump(tests, f)
+    st.success("Tests saved to tests.json - run browsing_agent.py")
+
+    import json
+    with open("tests.json", "r") as f:
+        tests = json.load(f)
+        st.write("Running tests...")

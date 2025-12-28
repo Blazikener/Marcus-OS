@@ -1,3 +1,4 @@
+from site import check_enableusersite
 import time
 from dataclasses import dataclass
 from typing import List, Dict
@@ -10,6 +11,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 from openai import OpenAI  
 from tenacity import retry, stop_after_attempt, wait_exponential
+from typing import Optional
 
 
 
@@ -223,5 +225,7 @@ Return ONLY the JSON array, no explanation, no markdown.
     end = text.rfind("]") + 1
     if start == -1 or end == 0:
         raise ValueError("Model did not return a JSON array")
-    return json.loads(text[start:end])
-
+    #print(text)
+    #print(len(text))
+    tests = json.loads(text[start:end])
+    return tests

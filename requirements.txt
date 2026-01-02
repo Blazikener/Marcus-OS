@@ -6,4 +6,5 @@ python-dotenv
 python-multipart
 celery
 pillow
+redis
 rabbitmq-client  # not required, just run rabbitmq server; celery depends on kombu

@@ -67,3 +67,19 @@ def process_image(self, item_id: str):
 
     db.items.update_one({"_id": oid}, {"$set": {"thumbnail_id": str(thumb_id), "processing_status": "done"}})
     return {"status": "ok", "thumbnail_id": str(thumb_id)}
+
+import time
+from app.utils.mock_redis import MockRedis
+
+@celery.task
+def cache_task(key: str, value: str):
+    # Simulate heavy processing
+    time.sleep(5)
+    
+    # Connect to Mock Redis using file storage
+    r = MockRedis.from_url("local")
+    
+    # Set the value with a TTL of 60 seconds
+    r.setex(key, 60, value)
+    
+    return {"status": "cached", "key": key, "value": value}

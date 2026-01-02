@@ -19,6 +19,9 @@ async def create_item_endpoint(
     title: str = Form(...),
     description: Optional[str] = Form(None),
     metadata: Optional[str] = Form(None),
+    type: Optional[str] = Form(None),
+    expected_result: Optional[str] = Form(None),
+    steps: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     db: AsyncIOMotorDatabase = Depends(get_db_dep),
     fs: AsyncIOMotorGridFSBucket = Depends(get_gridfs_bucket),
@@ -58,7 +61,21 @@ async def create_item_endpoint(
     about the newly created item, such as its title, description, metadata, and image ID.
     """
     # build json document
-    item_data = {"title": title, "description": description}
+    item_data = {
+        "title": title,
+        "description": description,
+        "type": type,
+        "expected_result": expected_result,
+        # "steps": steps, # handled below
+    }
+    
+    if steps:
+        try:
+           item_data["steps"] = json.loads(steps)
+        except Exception:
+             # Fallback: treat as a single step string or raw value
+             item_data["steps"] = [steps]
+             
     if metadata:
         try:
             item_data["metadata"] = json.loads(metadata)
@@ -90,36 +107,53 @@ async def create_item_endpoint(
     return ItemOut(**saved)
 
 
-@router.get("/latest-image-stream")
-async def latest_image_stream(db: AsyncIOMotorDatabase = Depends(get_db_dep), fs: AsyncIOMotorGridFSBucket = Depends(get_gridfs_bucket)):
-    
-    """
-    The function `latest_image_stream` retrieves the latest image from a MongoDB database and streams it
-    as a response with the appropriate content type.
-    
-    :param db: The `db` parameter is an instance of `AsyncIOMotorDatabase`, which is used to interact
-    with a MongoDB database asynchronously. It is typically used for executing database operations like
-    querying, inserting, updating, and deleting data in a non-blocking manner. In this case, it is being
-    used to
-    :type db: AsyncIOMotorDatabase
-    :param fs: The `fs` parameter in the function `latest_image_stream` is an instance of
-    `AsyncIOMotorGridFSBucket`, which is used for interacting with a GridFS bucket in MongoDB. It allows
-    you to perform operations like uploading, downloading, and deleting files in a GridFS bucket
-    asynchronously
-    :type fs: AsyncIOMotorGridFSBucket
-    :return: A StreamingResponse object is being returned, which streams the content of the latest image
-    file stored in the MongoDB GridFS bucket. The media type of the content is determined based on the
-    metadata of the image file, defaulting to "image/jpeg" if not specified.
-    """
-    latest = await get_latest_image_meta(db)
-    if not latest:
-        return Response(status_code=404, content=b"No JPEG found")
+# @router.get("/latest-image-stream")
+# async def latest_image_stream(db: AsyncIOMotorDatabase = Depends(get_db_dep), fs: AsyncIOMotorGridFSBucket = Depends(get_gridfs_bucket)):
+#     
+#     """
+#     The function `latest_image_stream` retrieves the latest image from a MongoDB database and streams it
+#     as a response with the appropriate content type.
+#     
+#     :param db: The `db` parameter is an instance of `AsyncIOMotorDatabase`, which is used to interact
+#     with a MongoDB database asynchronously. It is typically used for executing database operations like
+#     querying, inserting, updating, and deleting data in a non-blocking manner. In this case, it is being
+#     used to
+#     :type db: AsyncIOMotorDatabase
+#     :param fs: The `fs` parameter in the function `latest_image_stream` is an instance of
+#     `AsyncIOMotorGridFSBucket`, which is used for interacting with a GridFS bucket in MongoDB. It allows
+#     you to perform operations like uploading, downloading, and deleting files in a GridFS bucket
+#     asynchronously
+#     :type fs: AsyncIOMotorGridFSBucket
+#     :return: A StreamingResponse object is being returned, which streams the content of the latest image
+#     file stored in the MongoDB GridFS bucket. The media type of the content is determined based on the
+#     metadata of the image file, defaulting to "image/jpeg" if not specified.
+#     """
+#     latest = await get_latest_image_meta(db)
+#     if not latest:
+#         return Response(status_code=404, content=b"No JPEG found")
+# 
+#     file_id = str(latest["_id"])
+#     content_type = latest.get("metadata", {}).get("contentType", "image/jpeg")
+#     generator = open_image_stream(fs, file_id)
+#     return StreamingResponse(generator, media_type=content_type)
 
-    file_id = str(latest["_id"])
-    content_type = latest.get("metadata", {}).get("contentType", "image/jpeg")
-    generator = open_image_stream(fs, file_id)
-    return StreamingResponse(generator, media_type=content_type)
 
 
+# Redis Cache Testing Endpoints
+from app.utils.mock_redis import MockRedis
+from app.Celery.image_tasks import cache_task
 
-    
+@router.get("/cache/{key}")
+async def get_cache(key: str):
+    # Connect to Mock Redis directory
+    r = MockRedis.from_url("local")
+    value = r.get(key)
+    if value:
+        return {"key": key, "value": value.decode("utf-8"), "status": "HIT"}
+    return {"key": key, "value": None, "status": "MISS", "message": "Use POST /items/cache/compute/{key} to calculate value."}
+
+@router.post("/cache/compute/{key}")
+async def compute_cache(key: str, value: str = Form(...)):
+    # Trigger Celery task
+    task = cache_task.delay(key, value)
+    return {"key": key, "task_id": task.id, "status": "Processing triggered"}

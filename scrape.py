@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import List, Dict
 import os
 import json
+import playwright
 
 import selenium.webdriver as webdriver
 from selenium.webdriver.chrome.service import Service
@@ -225,4 +226,5 @@ Return ONLY the JSON array, no explanation, no markdown.
     if start == -1 or end == 0:
         raise ValueError("Model did not return a JSON array")
     return json.loads(text[start:end])
+
 

@@ -339,7 +339,6 @@ Return ONLY the JSON array, no explanation, no markdown.
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.4,
-            max_tokens=3000,
         )
         
         text = resp.choices[0].message.content
@@ -356,6 +355,9 @@ Return ONLY the JSON array, no explanation, no markdown.
         print(f" Generated {len(test_cases)} test cases")
         
         return test_cases
+
+        with open("test_cases.json", "w") as f:
+            json.dump(test_cases, f)
         
     except json.JSONDecodeError as e:
         print(f" Failed to parse LLM response as JSON: {e}")

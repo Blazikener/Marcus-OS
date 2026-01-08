@@ -1,46 +1,34 @@
-from browser_use import Agent, ChatOpenAI, sandbox, ChatBrowserUse, Browser
-from dotenv import load_dotenv
 import asyncio
 import json
-import os
+from e2b import Sandbox
+from browser_use import Agent, ChatOpenAI
+from dotenv import load_dotenv
 
 load_dotenv()
 
-@sandbox()
-async def main(browser: Browser):
-    if not os.path.exists("tests.json"):
-        print("tests.json not found!")
-        return
+async def main():
+    # E2B sandbox creates successfully
+    sandbox = await Sandbox.create(template="browser-chromium")
     
     try:
-        with open("tests.json", "r", encoding='utf-8') as f:
-            tests = json.load(f)
-        print(f"Loaded {len(tests)} tests")
-    except Exception as e:
-        print(f"Error loading tests: {e}")
-        return
-    
-    for i, test in enumerate(tests):
-        # Extract task description as STRING for browser-use Agent
-        task_description = test.get("description", "Navigate and test website functionality")
-        task_prompt = f"""
-Test Case: {test.get('title', 'Unknown')}
-Type: {test.get('type', 'positive').upper()}
-Expected: {test.get('expected_result', 'Success')}
-Description: {task_description}
-
-Execute these steps:
-{chr(10).join([f"- {step}" for step in test.get('steps', [])])}
-
-Report PASS/FAIL with screenshots.
-"""
+        # Get Chrome CDP endpoint 
+        chrome_host = await sandbox.get_host(9222)
+        cdp_url = f"wss://{chrome_host}"
+        print(f"CDP URL: {cdp_url}")  # Prints: wss://sandbox-abc123.e2b.dev
         
-        print(f"Running test {i+1}/{len(tests)}: {test.get('title', 'Unknown')}")
+        # Agent ignores remote browser - spawns LOCAL Chrome
+        llm = ChatOpenAI(model="gpt-4o-mini")
+        agent = Agent(
+            task="Go to google.com and search 'test'",
+            llm=llm,
+            browser_url=cdp_url  
+        )
         
-        llm = ChatOpenAI(model="gpt-4.1-mini")
-        agent = Agent(task=task_prompt,  browser=browser, llm=llm) 
-        await agent.run()
+        result = await agent.run()  # Local Chrome opens instead of E2B
+        print(result)
+        
+    finally:
+        await sandbox.close()
 
 if __name__ == "__main__":
     asyncio.run(main())
-    

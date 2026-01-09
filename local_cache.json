@@ -78,5 +78,41 @@
   "item:6960f961c8706ce44fd57ad2": {
     "value": "{\"id\": \"6960f961c8706ce44fd57ad2\", \"type\": \"positive\", \"title\": \"Verify Page Loads After Clearing Cookies and Cache\", \"description\": \"Test homepage loading after clearing all browser cookies and cache.\", \"expected_result\": \"The page loads successfully and displays content.\", \"steps\": [\"Clear all cookies and cache in the browser.\", \"Open https://youtube.com.\", \"Wait for the page to finish loading.\", \"Verify that the homepage content is visible and loads without errors.\"], \"created_at\": \"2026-01-09 12:49:37.602000+00:00\"}",
     "expiry": 1767966577.664932
+  },
+  "item:6960feea04ce61eea741b3a3": {
+    "value": "{\"id\": \"6960feea04ce61eea741b3a3\", \"type\": \"positive\", \"title\": \"Verify Page Loads Successfully\", \"description\": \"Ensure that the YouTube homepage loads without errors and displays content.\", \"expected_result\": \"The page loads completely, and content is visible without errors.\", \"steps\": [\"Open a new browser window.\", \"Navigate to https://youtube.com.\", \"Wait for the page to finish loading.\", \"Check that the page status is 200 (OK).\", \"Verify that the page contains visible content (e.g., videos, navigation elements).\"], \"created_at\": \"2026-01-09 13:13:14.393000+00:00\"}",
+    "expiry": 1767967994.470715
+  },
+  "item:6960feea04ce61eea741b3a4": {
+    "value": "{\"id\": \"6960feea04ce61eea741b3a4\", \"type\": \"negative\", \"title\": \"Verify Page Loads with Invalid URL\", \"description\": \"Test the behavior when navigating to a malformed YouTube URL.\", \"expected_result\": \"The browser displays a 404 or error page.\", \"steps\": [\"Open a new browser window.\", \"Navigate to https://youtube.com/invalidpage.\", \"Wait for the page to finish loading.\", \"Verify that an error message or 404 page is displayed.\"], \"created_at\": \"2026-01-09 13:13:14.472000+00:00\"}",
+    "expiry": 1767967994.579197
+  },
+  "item:6960feea04ce61eea741b3a5": {
+    "value": "{\"id\": \"6960feea04ce61eea741b3a5\", \"type\": \"positive\", \"title\": \"Verify Page Title\", \"description\": \"Check that the page title is set (even if it is 'Untitled').\", \"expected_result\": \"The page title is 'Untitled'.\", \"steps\": [\"Open https://youtube.com in a new browser window.\", \"Wait for the page to finish loading.\", \"Read the page title from the browser tab.\", \"Verify that the page title is exactly 'Untitled'.\"], \"created_at\": \"2026-01-09 13:13:14.581000+00:00\"}",
+    "expiry": 1767967994.7168634
+  },
+  "item:6960feea04ce61eea741b3a6": {
+    "value": "{\"id\": \"6960feea04ce61eea741b3a6\", \"type\": \"positive\", \"title\": \"Verify Page Loads with Disabled JavaScript\", \"description\": \"Test the homepage rendering when JavaScript is disabled in the browser.\", \"expected_result\": \"The page loads, but dynamic content may be missing or display a warning.\", \"steps\": [\"Open browser settings and disable JavaScript.\", \"Navigate to https://youtube.com.\", \"Wait for the page to finish loading.\", \"Verify whether any warning or fallback content is displayed.\"], \"created_at\": \"2026-01-09 13:13:14.718000+00:00\"}",
+    "expiry": 1767967994.7955034
+  },
+  "item:6960feea04ce61eea741b3a7": {
+    "value": "{\"id\": \"6960feea04ce61eea741b3a7\", \"type\": \"negative\", \"title\": \"Verify Page Loads with Slow Network\", \"description\": \"Test YouTube homepage loading under slow network conditions.\", \"expected_result\": \"The page loads eventually or displays a timeout/error message.\", \"steps\": [\"Open browser developer tools.\", \"Set the network speed to 'Slow 3G'.\", \"Navigate to https://youtube.com.\", \"Wait up to 60 seconds for the page to load.\", \"Verify if the page loads or an error/timeout is displayed.\"], \"created_at\": \"2026-01-09 13:13:14.796000+00:00\"}",
+    "expiry": 1767967994.918519
+  },
+  "item:6960feea04ce61eea741b3a8": {
+    "value": "{\"id\": \"6960feea04ce61eea741b3a8\", \"type\": \"positive\", \"title\": \"Verify HTTPS Security\", \"description\": \"Ensure that the homepage is served over HTTPS and the certificate is valid.\", \"expected_result\": \"The page is served over HTTPS with a valid certificate.\", \"steps\": [\"Open https://youtube.com in a new browser window.\", \"Check the browser's address bar for a lock icon.\", \"Verify that no security warnings are displayed.\", \"Inspect the certificate details to ensure it is valid.\"], \"created_at\": \"2026-01-09 13:13:14.920000+00:00\"}",
+    "expiry": 1767967995.0384004
+  },
+  "item:6960feeb04ce61eea741b3a9": {
+    "value": "{\"id\": \"6960feeb04ce61eea741b3a9\", \"type\": \"positive\", \"title\": \"Verify Page Loads with Unsupported Browser\", \"description\": \"Test homepage loading using an outdated or unsupported browser user agent.\", \"expected_result\": \"The page loads or displays a warning about browser compatibility.\", \"steps\": [\"Set the browser user agent to Internet Explorer 9.\", \"Navigate to https://youtube.com.\", \"Wait for the page to finish loading.\", \"Verify if the page displays a compatibility warning or loads with degraded functionality.\"], \"created_at\": \"2026-01-09 13:13:15.039000+00:00\"}",
+    "expiry": 1767967995.1231978
+  },
+  "item:6960feeb04ce61eea741b3aa": {
+    "value": "{\"id\": \"6960feeb04ce61eea741b3aa\", \"type\": \"negative\", \"title\": \"Verify No Forms Present on Homepage\", \"description\": \"Ensure that there are no forms present on the homepage as per detected features.\", \"expected_result\": \"No form elements are present in the DOM.\", \"steps\": [\"Open https://youtube.com in a new browser window.\", \"Wait for the page to finish loading.\", \"Search the DOM for any <form> elements.\", \"Verify that no <form> elements are found.\"], \"created_at\": \"2026-01-09 13:13:15.125000+00:00\"}",
+    "expiry": 1767967995.2607255
+  },
+  "item:6960feeb04ce61eea741b3ab": {
+    "value": "{\"id\": \"6960feeb04ce61eea741b3ab\", \"type\": \"positive\", \"title\": \"Verify Page Loads After Clearing Cookies and Cache\", \"description\": \"Test homepage loading after clearing all browser cookies and cache.\", \"expected_result\": \"The page loads successfully and displays content.\", \"steps\": [\"Clear all cookies and cache in the browser.\", \"Open https://youtube.com.\", \"Wait for the page to finish loading.\", \"Verify that the homepage content is visible and loads without errors.\"], \"created_at\": \"2026-01-09 13:13:15.262000+00:00\"}",
+    "expiry": 1767967995.329959
   }
 }

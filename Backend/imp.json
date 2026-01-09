@@ -1,0 +1,53 @@
+{
+    "window.menuBarVisibility": "compact",
+    "editor.minimap.enabled": false,
+    "kilo-code.allowedCommands": [
+        "git log",
+        "git diff",
+        "git show",
+        "npm test",
+        "npm install",
+        "tsc"
+    ],
+    "kilo-code.deniedCommands": [],
+    "yaml.schemas": {
+        "file:///c%3A/Users/nagav/.vscode/extensions/continue.continue-1.2.11-win32-x64/config-yaml-schema.json": [
+            ".continue/**/*.yaml"
+        ]
+    },
+    "github.copilot.nextEditSuggestions.enabled": false,
+    "github.copilot.enable": {
+        "*": false,
+        "plaintext": false,
+        "markdown": false,
+        "scminput": false,
+        "java": false,
+        "python": false
+    },
+    "liveServer.settings.donotShowInfoMsg": true,
+    "workbench.colorTheme": "Vesper",
+    "workbench.activityBar.location": "top",
+    "editor.cursorSmoothCaretAnimation": "on",
+    "workbench.colorCustomizations": {},
+    "workbench.iconTheme": "symbols",
+    "editor.largeFileOptimizations": false,
+    "git.confirmSync": false,
+    "diffEditor.codeLens": true,
+    "geminicodeassist.project": "smooth-flash-hg250",
+    "[dockercompose]": {
+        "editor.insertSpaces": true,
+        "editor.tabSize": 2,
+        "editor.autoIndent": "advanced",
+        "editor.quickSuggestions": {
+            "other": true,
+            "comments": false,
+            "strings": true
+        },
+        "editor.defaultFormatter": "redhat.vscode-yaml"
+    },
+    "[github-actions-workflow]": {
+        "editor.defaultFormatter": "redhat.vscode-yaml"
+    },
+    "geminicodeassist.inlineSuggestions.enableAuto": true,
+    "workbench.sideBar.location": "right"
+}

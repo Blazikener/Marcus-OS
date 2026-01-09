@@ -50,3 +50,11 @@ class MockRedis:
         }
         self._write_cache(data)
         return True
+
+    def delete(self, key):
+        data = self._read_cache()
+        if key in data:
+            del data[key]
+            self._write_cache(data)
+            return True
+        return False

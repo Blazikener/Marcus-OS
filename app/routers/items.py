@@ -11,6 +11,10 @@ from app.crud.crud_items import Create_item, save_image, get_latest_image_meta, 
 from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorGridFSBucket
 from app.Celery.image_tasks import process_image
 import json
+from typing import List
+from app.utils.pdf_handler import parse_pdf_test_cases
+from app.utils.cache_manager import cache_manager
+from app.crud.crud_items import Get_item
 
 router = APIRouter(prefix="/items", tags=["items"])
 
@@ -99,10 +103,18 @@ async def create_item_endpoint(
         async_result = process_image.delay(saved["id"])
         # store task id and status optionally
         if async_result and async_result.id:
-            await update_item_fields(db, saved["id"], {"task_id": async_result.id, "processing_status": "queued"})
+            task_id = async_result.id
+            status = "queued"
+            await update_item_fields(db, saved["id"], {"task_id": task_id, "processing_status": status})
+            # Sync local dict for immediate caching
+            saved["task_id"] = task_id
+            saved["processing_status"] = status
     except Exception as e:
         # log enqueue error but don't fail the request
         print("Failed to enqueue image processing task:", e)
+
+    # Initial cache (will be invalidated later by Celery task completion)
+    cache_manager.set_item(saved["id"], saved)
 
     return ItemOut(**saved)
 
@@ -157,3 +169,58 @@ async def compute_cache(key: str, value: str = Form(...)):
     # Trigger Celery task
     task = cache_task.delay(key, value)
     return {"key": key, "task_id": task.id, "status": "Processing triggered"}
+
+@router.post("/upload-pdf", response_model=List[ItemOut])
+async def upload_pdf_endpoint(
+    file: UploadFile = File(...),
+    db: AsyncIOMotorDatabase = Depends(get_db_dep)
+):
+    """
+    Upload a PDF file containing test cases in JSON-like blocks.
+    The parser will extract the test cases, classify them, and save them to the database.
+    """
+    if file.content_type != "application/pdf" and not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files allowed")
+    
+    try:
+        contents = await file.read()
+        test_cases = parse_pdf_test_cases(contents)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error parsing PDF: {str(e)}")
+        
+    if not test_cases:
+        raise HTTPException(status_code=404, detail="No valid test cases found in PDF")
+        
+    saved_items = []
+    for case in test_cases:
+        # Each case is already classified by parse_pdf_test_cases
+        saved = await Create_item(db, case)
+        cache_manager.set_item(saved["id"], saved)
+        saved_items.append(ItemOut(**saved))
+        
+    return saved_items
+
+@router.get("/{item_id}", response_model=ItemOut)
+async def get_item_endpoint(
+    item_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db_dep)
+):
+    """
+    Get an item by ID. 
+    First checks the cache, then falls back to the database.
+    """
+    # Try cache first
+    cached_item = cache_manager.get_item(item_id)
+    if cached_item:
+        print(f"Cache HIT for item {item_id}")
+        return ItemOut(**cached_item)
+    
+    print(f"Cache MISS for item {item_id}")
+    # Fallback to DB
+    item = await Get_item(db, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+        
+    # Store in cache for next time
+    cache_manager.set_item(item_id, item)
+    return ItemOut(**item)

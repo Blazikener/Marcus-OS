@@ -7,6 +7,7 @@ from PIL import Image
 from dotenv import load_dotenv
 from bson import ObjectId
 import os
+from app.utils.cache_manager import cache_manager
 
 load_dotenv()
 
@@ -66,6 +67,10 @@ def process_image(self, item_id: str):
         return {"error": f"thumbnail creation failed: {exc}"}
 
     db.items.update_one({"_id": oid}, {"$set": {"thumbnail_id": str(thumb_id), "processing_status": "done"}})
+    
+    # Invalidate cache so the next GET fetches the updated item with thumbnail_id
+    cache_manager.invalidate_item(item_id)
+    
     return {"status": "ok", "thumbnail_id": str(thumb_id)}
 
 import time

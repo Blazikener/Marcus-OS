@@ -1,0 +1,170 @@
+{\rtf1\ansi\ansicpg1252\deff0\nouicompat\deflang1033{\fonttbl{\f0\fnil\fcharset0 Calibri;}}
+{\colortbl ;\red0\green0\blue255;}
+{\*\generator Riched20 10.0.19041}\viewkind4\uc1 
+\pard\sa200\sl276\slmult1\f0\fs22\lang9 [\par
+  \{\par
+    "id": 1,\par
+    "type": "positive",\par
+    "title": "Verify Page Loads Successfully",\par
+    "description": "Ensure that the YouTube homepage loads without errors and displays content.",\par
+    "expected_result": "The page loads completely, and content is visible without errors.",    \par
+    "steps": [\par
+      "Open a new browser window.",\par
+      "Navigate to {{\field{\*\fldinst{HYPERLINK https://youtube.com }}{\fldrslt{https://youtube.com\ul0\cf0}}}}\f0\fs22 .",\par
+      "Wait for the page to finish loading.",\par
+      "Check that the page status is 200 (OK).",\par
+      "Verify that the page contains visible content (e.g., videos, navigation elements)."     \par
+    ]\par
+  \},\par
+  \{\par
+    "id": 2,\par
+    "type": "negative",\par
+    "title": "Verify Page Loads with Invalid URL",\par
+    "description": "Test the behavior when navigating to a malformed YouTube URL.",\par
+    "expected_result": "The browser displays a 404 or error page.",\par
+    "steps": [\par
+      "Open a new browser window.",\par
+      "Navigate to {{\field{\*\fldinst{HYPERLINK https://youtube.com/invalidpage }}{\fldrslt{https://youtube.com/invalidpage\ul0\cf0}}}}\f0\fs22 .",\par
+      "Wait for the page to finish loading.",\par
+      "Verify that an error message or 404 page is displayed."\par
+    ]\par
+  \},\par
+  \{\par
+    "id": 3,\par
+    "type": "positive",\par
+    "title": "Verify Page Title",\par
+    "description": "Check that the page title is set (even if it is 'Untitled').",\par
+    "expected_result": "The page title is 'Untitled'.",\par
+    "steps": [\par
+      "Open {{\field{\*\fldinst{HYPERLINK https://youtube.com }}{\fldrslt{https://youtube.com\ul0\cf0}}}}\f0\fs22  in a new browser window.",\par
+      "Wait for the page to finish loading.",\par
+      "Read the page title from the browser tab.",\par
+      "Verify that the page title is exactly 'Untitled'."\par
+    ]\par
+  \},\par
+  \{\par
+    "id": 4,\par
+    "type": "edge",\par
+    "title": "Verify Page Loads with Disabled JavaScript",\par
+    "description": "Test the homepage rendering when JavaScript is disabled in the browser.",  \par
+    "expected_result": "The page loads, but dynamic content may be missing or display a warning.",\par
+    "steps": [\par
+      "Open browser settings and disable JavaScript.",\par
+      "Navigate to {{\field{\*\fldinst{HYPERLINK https://youtube.com }}{\fldrslt{https://youtube.com\ul0\cf0}}}}\f0\fs22 .",\par
+      "Wait for the page to finish loading.",\par
+      "Verify whether any warning or fallback content is displayed."\par
+    ]\par
+  \},\par
+  \{\par
+    "id": 5,\par
+    "type": "negative",\par
+    "title": "Verify Page Loads with Slow Network",\par
+    "description": "Test YouTube homepage loading under slow network conditions.",\par
+    "expected_result": "The page loads eventually or displays a timeout/error message.",       \par
+    "steps": [\par
+      "Open browser developer tools.",\par
+      "Set the network speed to 'Slow 3G'.",\par
+      "Navigate to {{\field{\*\fldinst{HYPERLINK https://youtube.com }}{\fldrslt{https://youtube.com\ul0\cf0}}}}\f0\fs22 .",\par
+      "Wait up to 60 seconds for the page to load.",\par
+      "Verify if the page loads or an error/timeout is displayed."\par
+    ]\par
+  \},\par
+  \{\par
+    "id": 6,\par
+    "type": "positive",\par
+    "title": "Verify HTTPS Security",\par
+    "description": "Ensure that the homepage is served over HTTPS and the certificate is valid.",\par
+    "expected_result": "The page is served over HTTPS with a valid certificate.",\par
+    "steps": [\par
+      "Open {{\field{\*\fldinst{HYPERLINK https://youtube.com }}{\fldrslt{https://youtube.com\ul0\cf0}}}}\f0\fs22  in a new browser window.",\par
+      "Check the browser's address bar for a lock icon.",\par
+      "Verify that no security warnings are displayed.",\par
+      "Inspect the certificate details to ensure it is valid."\par
+    ]\par
+  \},\par
+  \{\par
+    "id": 7,\par
+    "type": "edge",\par
+    "title": "Verify Page Loads with Unsupported Browser",\par
+    "description": "Test homepage loading using an outdated or unsupported browser user agent.",\par
+    "expected_result": "The page loads or displays a warning about browser compatibility.",    \par
+    "steps": [\par
+      "Set the browser user agent to Internet Explorer 9.",\par
+      "Navigate to {{\field{\*\fldinst{HYPERLINK https://youtube.com }}{\fldrslt{https://youtube.com\ul0\cf0}}}}\f0\fs22 .",\par
+      "Wait for the page to finish loading.",\par
+      "Verify if the page displays a compatibility warning or loads with degraded functionality."\par
+    ]\par
+  \},\par
+  \{\par
+    "id": 8,\par
+    "type": "negative",\par
+    "title": "Verify No Forms Present on Homepage",\par
+    "description": "Ensure that there are no forms present on the homepage as per detected features.",\par
+    "expected_result": "No form elements are present in the DOM.",\par
+    "steps": [\par
+      "Open {{\field{\*\fldinst{HYPERLINK https://youtube.com }}{\fldrslt{https://youtube.com\ul0\cf0}}}}\f0\fs22  in a new browser window.",\par
+      "Wait for the page to finish loading.",\par
+      "Search the DOM for any <form> elements.",\par
+      "Verify that no <form> elements are found."\par
+    ]\par
+  \},\par
+  \{\par
+    "id": 9,\par
+    "type": "edge",\par
+    "title": "Verify Page Loads After Clearing Cookies and Cache",\par
+    "description": "Test homepage loading after clearing all browser cookies and cache.",      \par
+    "expected_result": "The page loads successfully and displays content.",\par
+    "steps": [\par
+      "Clear all cookies and cache in the browser.",\par
+      "Open {{\field{\*\fldinst{HYPERLINK https://youtube.com }}{\fldrslt{https://youtube.com\ul0\cf0}}}}\f0\fs22 .",\par
+      "Wait for the page to finish loading.",\par
+      "Verify that the homepage content is visible and loads without errors."\par
+    ]\par
+  \},\par
+  \{\par
+    "id": 10,\par
+    "type": "positive",\par
+    "title": "Verify No Buttons Present on Homepage",\par
+    "description": "Ensure that there are no clickable button elements on the homepage as per detected features.",\par
+    "expected_result": "No <button> elements are present in the DOM.",\par
+    "steps": [\par
+      "Open {{\field{\*\fldinst{HYPERLINK https://youtube.com }}{\fldrslt{https://youtube.com\ul0\cf0}}}}\f0\fs22  in a new browser window.",\par
+      "Wait for the page to finish loading.",\par
+      "Search the DOM for any <button> elements.",\par
+      "Verify that no <button> elements are found."\par
+    ]\par
+  \},\par
+  \{\par
+    "id": 11,\par
+    "type": "negative",\par
+    "title": "Verify Page Loads After Forcing HTTP",\par
+    "description": "Test the behavior when attempting to access YouTube over HTTP instead of HTTPS.",\par
+    "expected_result": "The browser redirects to HTTPS or displays a security warning.",       \par
+    "steps": [\par
+      "Open {{\field{\*\fldinst{HYPERLINK http://youtube.com }}{\fldrslt{http://youtube.com\ul0\cf0}}}}\f0\fs22  in a new browser window.",\par
+      "Wait for the page to finish loading.",\par
+      "Verify that the browser redirects to {{\field{\*\fldinst{HYPERLINK https://youtube.com }}{\fldrslt{https://youtube.com\ul0\cf0}}}}\f0\fs22  or displays a security warning."\par
+    ]\par
+  \}\par
+]\par
+\par
+\par
+\par
+\par
+\par
+      "Verify that the browser redirects to {{\field{\*\fldinst{HYPERLINK https://youtube.com }}{\fldrslt{https://youtube.com\ul0\cf0}}}}\f0\fs22  or displays a security warning."\par
+    ]\par
+  \}\par
+]\par
+\par
+\par
+      "Verify that the browser redirects to {{\field{\*\fldinst{HYPERLINK https://youtube.com }}{\fldrslt{https://youtube.com\ul0\cf0}}}}\f0\fs22  or displays a security warning."\par
+    ]\par
+  \}\par
+      "Verify that the browser redirects to {{\field{\*\fldinst{HYPERLINK https://youtube.com }}{\fldrslt{https://youtube.com\ul0\cf0}}}}\f0\fs22  or displays a security warning."\par
+      "Verify that the browser redirects to {{\field{\*\fldinst{HYPERLINK https://youtube.com }}{\fldrslt{https://youtube.com\ul0\cf0}}}}\f0\fs22  or displays a security warning."\par
+    ]\par
+  \}\par
+]\par
+}
+ 

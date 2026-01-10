@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Local Cache
+local_cache.json
+*.json
+!tests.json
+!Backend/imp.json
+
+# Celery
+.celery/
+Backend/.celery/
+celerybeat-schedule
+celerybeat.pid
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backend specific
+Backend/local_cache.json
+Backend/control/
+
+GIT_WORKFLOW.md

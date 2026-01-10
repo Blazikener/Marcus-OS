@@ -1,0 +1,16 @@
+streamlit
+requests
+beautifulsoup4
+openai
+tenacity
+python-dotenv
+pydantic
+pydantic-settings
+pymongo
+motor
+celery
+fastapi
+uvicorn
+pypdf
+python-multipart
+# Add other dependencies as needed

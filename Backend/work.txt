@@ -1,0 +1,62 @@
+You are a senior Python backend engineer. Create a minimal but production-ready starter project with the following requirements:
+
+Tech stack:
+- FastAPI (async)
+- MongoDB using `motor` (AsyncIOMotorClient)
+- GridFS (via Motor) to store JPEG images in MongoDB
+- Celery for background jobs
+- Redis as the Celery broker (and result backend if needed)
+- Python 3.11+
+
+High‑level requirements:
+- An `/upload` POST endpoint that:
+  - Accepts multipart/form-data with:
+    - `data`: JSON string (field)
+    - `file`: JPEG image (file)
+  - Validates that `data` is valid JSON
+  - Stores:
+    - JSON into a MongoDB `inputs` collection
+    - JPEG into GridFS and references its file_id in the document
+  - Sets `status = "pending"` for the input document
+  - Enqueues a Celery task `process_task(record_id: str)` and returns `{"id": record_id}`
+
+- A Celery worker that:
+  - Connects to the same MongoDB and GridFS
+  - Given `record_id`, fetches the input document
+  - (For now) does dummy processing and creates an `outputs` document with:
+    - `input_id`
+    - `output_json = {"status": "processed", "input_id": record_id}`
+  - Updates the input document `status` from `"pending"` to `"done"`
+
+Project structure (feel free to improve names, but keep it clean and modular):
+- `app/main.py`      -> FastAPI app and routes
+- `app/models.py`    -> Pydantic models
+- `app/db.py`        -> Mongo/Motor + GridFS setup
+- `app/celery_app.py`-> Celery configuration
+- `app/tasks.py`     -> Celery tasks + async helpers
+- `requirements.txt`
+- `README.md`
+
+Implementation details:
+- Use environment variables for:
+  - `MONGO_URI` (default: `mongodb://localhost:27017`)
+  - `MONGO_DB_NAME` (default: `mydatabase`)
+  - `REDIS_URL` (default: `redis://localhost:6379/0`)
+- Provide a `.env.example` file showing these variables.
+- Use Pydantic models where appropriate (e.g., for the JSON payload).
+- Make the FastAPI route fully async.
+- Show how to start:
+  - The FastAPI server with `uvicorn`
+  - The Celery worker (exact command)
+- Add at least one simple endpoint `/status/{id}` that returns the current document for that `id` from `inputs` (so I can check if `status` changed to `"done"`).
+
+Output:
+1. The full project tree.
+2. The content of each file (only the essential code, no filler comments).
+3. Exact commands to:
+   - Install dependencies
+   - Run MongoDB and Redis (assume local dev)
+   - Start FastAPI app
+   - Start Celery worker
+
+Make the code clean, minimal, and ready for me to extend with real processing logic later.

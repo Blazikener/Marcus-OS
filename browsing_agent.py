@@ -6,39 +6,10 @@ import os
 
 load_dotenv()
 
-
 from e2b_desktop import Sandbox
 
-# Create a new desktop sandbox
-
-
 async def main():
-    desktop = Sandbox.create()
 
-    # Launch an application
-    desktop.launch('google-chrome')  # or vscode, firefox, etc.
-
-    # Wait 10s for the application to open
-    desktop.wait(10000)
-    chrome_url = desktop.get_chrome_endpoint()
-    print(f"Chrome URL: {chrome_url}")
-
-    # Stream the application's window
-    # Note: There can be only one stream at a time
-    # You need to stop the current stream before streaming another application
-    desktop.stream.start(
-        window_id=desktop.get_current_window_id(), # if not provided the whole desktop will be streamed
-        require_auth=True
-    )
-
-    # Get the stream auth key
-    auth_key = desktop.stream.get_auth_key()
-
-    # Print the stream URL
-    print('Stream URL:', desktop.stream.get_url(auth_key=auth_key))
-
-    # Kill the sandbox after the tasks are finished
-    # desktop.kill()
     if not os.path.exists("tests.json"):
         print("tests.json not found!")
         return

@@ -14,9 +14,39 @@ import json
 from typing import List
 from app.utils.pdf_handler import parse_pdf_test_cases
 from app.utils.cache_manager import cache_manager
-from app.crud.crud_items import Get_item
+from app.crud.crud_items import Get_item, Get_all_items, update_item_fields
 
 router = APIRouter(prefix="/items", tags=["items"])
+
+@router.get("/", response_model=List[ItemOut])
+async def get_all_items_endpoint(
+    db: AsyncIOMotorDatabase = Depends(get_db_dep)
+):
+    """
+    Get all items from the database.
+    """
+    items = await Get_all_items(db)
+    return items
+
+@router.patch("/{item_id}", response_model=ItemOut)
+async def update_item_endpoint(
+    item_id: str,
+    updates: dict,
+    db: AsyncIOMotorDatabase = Depends(get_db_dep)
+):
+    """
+    Update specific fields of an item.
+    """
+    success = await update_item_fields(db, item_id, updates)
+    if not success:
+        raise HTTPException(status_code=404, detail="Item not found or no changes made")
+    
+    # Invalidate cache
+    cache_manager.invalidate_item(item_id)
+    
+    updated_item = await Get_item(db, item_id)
+    return ItemOut(**updated_item)
+
 
 @router.post("/", response_model=ItemOut)
 async def create_item_endpoint(

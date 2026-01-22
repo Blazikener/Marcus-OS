@@ -2,7 +2,7 @@
 
 from bson import ObjectId
 from datetime import datetime, timezone
-from typing import Optional, AsyncGenerator, Dict, Any
+from typing import Optional, AsyncGenerator, Dict, Any, List
 from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorGridFSBucket
 from pymongo.errors import PyMongoError
 from bson import ObjectId
@@ -38,6 +38,10 @@ async def Create_item(db:AsyncIOMotorDatabase,item_dict:dict)->dict:
 
     inserted = await db.items.find_one({"_id": res.inserted_id})
     if inserted:
+        # Preserve original 'id' if it exists
+        if "id" in inserted and isinstance(inserted["id"], int):
+            inserted["item_id"] = inserted["id"]
+        
         inserted["id"] = str(inserted["_id"])
         inserted.pop("_id", None)
         ca = inserted.get("created_at")
@@ -46,6 +50,9 @@ async def Create_item(db:AsyncIOMotorDatabase,item_dict:dict)->dict:
         item_out = inserted
     else:
         # Use the items dict we inserted and ensure created_at has tzinfo
+        if "id" in items and isinstance(items["id"], int):
+            items["item_id"] = items["id"]
+        
         ca = items.get("created_at")
         if isinstance(ca, datetime) and ca.tzinfo is None:
             items["created_at"] = ca.replace(tzinfo=timezone.utc)
@@ -81,6 +88,10 @@ async def Get_item(db:AsyncIOMotorDatabase,item_id:str)->Optional[Dict[str,Any]]
     doc=await db.items.find_one({"_id":oid})
     if not doc:
         return None
+    
+    if "id" in doc and isinstance(doc["id"], int):
+        doc["item_id"] = doc["id"]
+        
     doc["id"]=str(doc["_id"])
     doc.pop("_id",None)
     return doc
@@ -221,3 +232,12 @@ async def update_item_fields(db: AsyncIOMotorDatabase, item_id: str, fields: Dic
         return False
     res = await db.items.update_one({"_id": oid}, {"$set": fields})
     return res.modified_count > 0
+
+async def Get_all_items(db: AsyncIOMotorDatabase) -> List[Dict[str, Any]]:
+    docs = await db.items.find().to_list(length=1000)
+    for doc in docs:
+        if "id" in doc and isinstance(doc["id"], int):
+            doc["item_id"] = doc["id"]
+        doc["id"] = str(doc["_id"])
+        doc.pop("_id", None)
+    return docs

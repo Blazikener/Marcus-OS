@@ -16,6 +16,7 @@ class ItemIn(BaseModel):
 # The `ItemOut` class extends `ItemIn` and includes additional attributes such as `id`, `image_id`,
 # and `created_at`.
 class ItemOut(ItemIn):
-    id: str
+    id: str  # This will be used for the stringified _id
+    item_id: Optional[int] = None  # To preserve any original integer 'id' field
     image_id: Optional[str] = None
     created_at: datetime = Field(..., example="2025-11-21T12:34:56+00:00")

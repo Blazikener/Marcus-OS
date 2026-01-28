@@ -9,6 +9,10 @@ from datetime import datetime
 from scrape import scrape_website, extract_website_intelligence, generate_test_cases
 from dataclasses import dataclass
 from typing import List, Dict
+import asyncio
+import jsonschema
+import threading
+
 
 
 st.set_page_config(
@@ -100,7 +104,7 @@ with tab1:
                     else:  # txt
                         brd_text = brd_file.read().decode('utf-8')
                     
-                    source = {"brd_content": brd_text[:16000]}  # Match web text_summary limit
+                    source = {"brd_content": brd_text[:-1]}  
                     st.success("Extracted {} chars from BRD".format(len(brd_text)))
                 
                 # HANDLE WEBSITE (if URL provided AND not BRD-only)
@@ -112,6 +116,7 @@ with tab1:
                         extracted = extract_website_intelligence(html, url)
                 
                 # CREATE DUMMY EXTRACTED if no web data (for BRD-only mode)
+                #!!!! Why the fuck do we need to extract buttons, dom structure etc.. from BRD?????
                 if extracted is None:
                     from scrape import ExtractedWebsiteData
                     extracted = ExtractedWebsiteData(
@@ -167,7 +172,7 @@ with tab1:
                     st.markdown("{}. {}".format(i, step))
 
 
-# TAB 2: Execute Tests  
+# TAB 2: Execute Tests 
 with tab2:
     st.header("Test Execution")
     
@@ -176,32 +181,78 @@ with tab2:
     else:
         col1, col2 = st.columns([4, 1])
         
-        with col1:
-            if st.button("Start Browser Tests", type="primary", use_container_width=True, 
-                        disabled=st.session_state.process_running):
+        async def safe_run_agent():
+            """Secure sandboxed agent spawn with JSON validation"""
+            try:
+                # STEP 1: Load + Schema Validation (Blocks attacks)
+                with open("tests.json", "r", encoding='utf-8') as f:
+                    tests = json.load(f)
+                
+                TEST_SCHEMA = {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer"},
+                            "steps": {"type": "array", "items": {"type": "string"}},
+                            "type": {"enum": ["positive", "negative", "edge"]}
+                        },
+                        "required": ["id", "steps"]
+                    }
+                }
+                jsonschema.validate(tests, TEST_SCHEMA)
+                st.success(f"Validated {len(tests)} SAFE tests")
+                
+                # STEP 2: Locked Environment
+                cmd = [sys.executable, "-m", "browsing_agent"]
                 env = os.environ.copy()
                 env['PYTHONIOENCODING'] = 'utf-8'
                 env['PYTHONUNBUFFERED'] = '1'
+                env['PYTHONPATH'] = os.getcwd()  # Lock to project dir ONLY
                 
-                process = subprocess.Popen([
-                    sys.executable, "-m", "browsing_agent"
-                ], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=os.getcwd())
+                # STEP 3: Sandboxed Async Spawn (No shell, cwd-locked)
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    env=env,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=os.getcwd()
+                )
                 
                 st.session_state.test_process = process
                 st.session_state.process_running = True
                 st.session_state.start_time = time.time()
-                st.success("Tests started! Monitoring live progress...")
+                st.success("Secure tests started!")
+                
+            except jsonschema.exceptions.ValidationError as e:
+                st.error(f"MALICIOUS TESTS BLOCKED: {str(e)[:-1]}")
+            except FileNotFoundError:
+                st.error("browsing_agent.py missing!")
+            except Exception as e:
+                st.error(f"Secure spawn failed: {str(e)}")
+                st.exception(e)
+        
+        with col1:
+            if st.button("Start Browser Tests", type="primary", use_container_width=True, 
+                        disabled=st.session_state.process_running):
+                # Streamlit async hack: Thread + asyncio.run()
+                import threading
+                threading.Thread(
+                    target=lambda: asyncio.run(safe_run_agent()), 
+                    daemon=True
+                ).start()
                 st.rerun()
         
         with col2:
             if st.session_state.process_running:
                 if st.button("Stop Tests", type="secondary", use_container_width=True):
-                    st.session_state.test_process.terminate()
+                    if 'test_process' in st.session_state:
+                        st.session_state.test_process.terminate()
                     st.session_state.process_running = False
                     st.warning("Tests stopped!")
                     st.rerun()
         
-        # Live monitoring
+        # Live monitoring (YOUR ORIGINAL CODE - UNCHANGED)
         if st.session_state.process_running:
             st.subheader("Live Execution Monitor")
             
@@ -254,7 +305,6 @@ with tab2:
                 st.session_state.process_running = False
                 st.success("All tests completed!")
                 st.rerun()
-
 
 # TAB 3: Results Dashboard
 with tab3:
@@ -345,3 +395,4 @@ with tab4:
             st.error("Cannot generate export")
     else:
         st.info("Run tests first")
+

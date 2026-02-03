@@ -1,13 +1,12 @@
 """
-Marcus Intelligence - Production Browser Agent
-✅ Step 2: JSON parsing + reason field (95% reliable)
+Browser Agent
 """
 
 import asyncio
 import json
 import os
 import sys
-import re  # ✅ JSON extraction
+import re  
 from datetime import datetime
 from dotenv import load_dotenv
 from browser_use import Agent, ChatOpenAI
@@ -47,7 +46,7 @@ async def execute_single_test(test: dict, test_id: int, total_tests: int) -> dic
 Test ID: TC{test.get('id', 0)}
 Title: {test.get('title', 'Unknown')}
 Type: {test.get('type', 'positive').upper()}
-Expected: {test.get('expected_result', 'Manual Check')}
+Expected: {test.get('expected_result', 'Manual Check Needed')}
 
 Execute EXACTLY these steps:
 {chr(10).join(f"{i+1}. {step}" for i, step in enumerate(test.get('steps', [])))}
@@ -60,21 +59,21 @@ PASS: {{"verdict": "PASS", "reason": "Found/clicked login → dashboard loaded",
 FAIL: {{"verdict": "FAIL", "reason": "Button 'Login' not visible", "final_url": "https://site.com"}}
 """
     
-    llm = ChatOpenAI(model="gpt-4o-mini")  # ✅ Your model fix
+    llm = ChatOpenAI(model="gpt-4o-mini")  
     
     try:
-        print(f"[TEST {test_id}] Executing with 90s timeout...")
+        print(f"[TEST {test_id}] Executing with 180s timeout...")
         agent = Agent(task=task_prompt, llm=llm)
         
         # Run agent
         try:
-            result = await asyncio.wait_for(agent.run(), timeout=90.0)
+            result = await asyncio.wait_for(agent.run(), timeout=180.0)
             result_str = str(result) if hasattr(result, '__str__') else repr(result)
         except asyncio.TimeoutError:
             result_str = "TIMEOUT - Agent did not complete in 90 seconds"
             print(f"[TEST {test_id}] TIMEOUT")
         
-        # ✅ JSON PARSER ALWAYS RUNS (moved OUTSIDE try)
+        # JSON PARSER ALWAYS RUNS (moved OUTSIDE try)
         json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', result_str, re.DOTALL)
         if json_match:
             try:

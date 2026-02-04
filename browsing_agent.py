@@ -70,7 +70,7 @@ FAIL: {{"verdict": "FAIL", "reason": "Button 'Login' not visible", "final_url": 
             result = await asyncio.wait_for(agent.run(), timeout=180.0)
             result_str = str(result) if hasattr(result, '__str__') else repr(result)
         except asyncio.TimeoutError:
-            result_str = "TIMEOUT - Agent did not complete in 90 seconds"
+            result_str = "TIMEOUT - Agent did not complete in 180 seconds"
             print(f"[TEST {test_id}] TIMEOUT")
         
         # JSON PARSER ALWAYS RUNS (moved OUTSIDE try)
@@ -90,14 +90,14 @@ FAIL: {{"verdict": "FAIL", "reason": "Button 'Login' not visible", "final_url": 
         
         print(f"[TEST {test_id}] Status: {status} | Reason: {reason[:50]}")
         
-        # ✅ COMPLETE RETURN DICT (no ellipsis)
+        #  COMPLETE RETURN DICT (no ellipsis)
         return {
             "test_id": test.get("id"),
             "title": test.get("title"),
             "type": test.get("type"),
             "status": status,
-            "reason": reason,  # ✅ Actionable debug (your addition!)
-            "final_url": final_url,  # ✅ Traceability
+            "reason": reason,  #  Actionable debug (your addition!)
+            "final_url": final_url,  # Traceability
             "execution_log": result_str[:1000],
             "timestamp": datetime.now().isoformat()
         }

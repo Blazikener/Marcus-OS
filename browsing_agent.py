@@ -81,7 +81,6 @@ with tab1:
                           help="Leave empty for BRD-only mode")
     with col2:
         mode = st.selectbox("Mode", ["Hybrid (Web+BRD)", "Web Only", "BRD Only"])
-    
     # BRD Upload + Instructions  
     brd_file = st.file_uploader("BRD/Requirements", type=['pdf','txt','docx'], 
                                help="Upload PDF/TXT/DOCX for requirements-based tests")

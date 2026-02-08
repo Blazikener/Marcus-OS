@@ -1,7 +1,9 @@
 """
 Website scraping and test case generation for Marcus Intelligence.
 Uses requests for fast, reliable HTTP scraping.
+Supports Web URL + BRD documents + Custom Instructions.
 """
+
 
 import time
 import re
@@ -11,16 +13,21 @@ from typing import List, Dict, Tuple, Optional
 from urllib.parse import urlparse
 import os
 
+
 import requests
 from bs4 import BeautifulSoup
 from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 from dotenv import load_dotenv
+import pypdf
+
 
 load_dotenv()
 
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-mini")  
+
 
 @dataclass
 class ExtractedWebsiteData:
@@ -45,16 +52,7 @@ def validate_and_normalize_url(url: str) -> Tuple[bool, str]:
         
     Returns:
         (is_valid, normalized_url) tuple
-        
-    Examples:
-        >>> validate_and_normalize_url("example.com")
-        (True, "https://example.com")
-        >>> validate_and_normalize_url("https://google.com")
-        (True, "https://google.com")
-        >>> validate_and_normalize_url("")
-        (False, "")
     """
-
     if not url or not url.strip():
         return False, ""
     
@@ -241,12 +239,14 @@ def extract_website_intelligence(html: str, url: str) -> ExtractedWebsiteData:
     )
 
 
-def generate_test_cases(extracted: ExtractedWebsiteData, coverage: str) -> List[Dict]:
+def generate_test_cases(source: Dict, instruction: str, extracted: ExtractedWebsiteData, coverage: str) -> List[Dict]:
     """
-    Generate test cases using OpenAI.
+    Generate test cases using OpenAI from Web + BRD + Instructions.
     
     Args:
-        extracted: Extracted website data
+        source: Dict with BRD content or other sources {"brd_content": "..."}
+        instruction: Custom test generation instructions
+        extracted: Extracted website data (optional if source provided)
         coverage: basic/standard/comprehensive
         
     Returns:
@@ -263,15 +263,15 @@ def generate_test_cases(extracted: ExtractedWebsiteData, coverage: str) -> List[
     client = OpenAI(api_key=OPENAI_API_KEY)
     
     coverage_map = {
-        "basic": "30-40",
-        "standard": "50-60",
-        "comprehensive": "70-80",
+        "basic": "3-4",
+        "standard": "8-12", 
+        "comprehensive": "40-60",
     }
-    coverage_label = coverage_map.get(coverage, "30-40")
+    coverage_label = coverage_map.get(coverage, "20-30")
     
     system_prompt = '''You are a senior QA automation engineer with 15+ years of experience specializing in web application testing. 
 Your expertise includes functional testing, edge case detection, and creating test cases that can be executed by AI agents such as browser-use agent.
-Given website data, generate comprehensive, executable test cases in valid JSON format only.
+Given website data AND/OR BRD requirements, generate comprehensive, executable test cases in valid JSON format only.
 Focus on real-world scenarios, security considerations, and user experience flows.
 Give high importance to the UI and UX and buttons of the website especially if the website is a web application.
 Each test case must be specific, actionable, and map directly to automatable browser actions.
@@ -285,9 +285,9 @@ CRITICAL SAFETY RULES:
 - If payment elements detected, test ONLY page load + basic navigation
 '''
     
-    user_prompt = f"""Generate {coverage_label} test cases for this website.
+    user_prompt = f"""Generate {coverage_label} test cases.
 
-WEBSITE:
+WEBSITE DATA (if available):
 - URL: {extracted.url}
 - Title: {extracted.title}
 - Description: {extracted.description}
@@ -307,23 +307,34 @@ DOM STRUCTURE:
 CONTENT SAMPLE:
 {extracted.text_summary[:2000]}
 
+"""
+
+    # ✅ CRITICAL: ACTIVATE source + instruction params (3 lines added)
+    if source:
+        user_prompt += f"\n\nADDITIONAL SOURCES (BRD/Requirements):\n{json.dumps(source, indent=2)}"
+    if instruction:
+        user_prompt += f"\n\nCUSTOM PRIORITIES:\n{instruction}"
+    user_prompt += "\n\n"
+
+    user_prompt += """
 Requirements:
 - Mix of positive, negative, and edge cases (at least 30% negative/edge)
 - Each test case must be concrete and automatable
-- Steps must reference actual UI elements (buttons, forms, links) found in the provided data
+- Steps must reference actual UI elements (buttons, forms, links) from data above
 - Include specific selectors or identifiable text from BUTTONS/FORMS sections
 - Avoid vague steps like "Navigate to page" - be very specific and actionable
-- Use this exact JSON schema:
+
+Use this exact JSON schema:
 
 [
-  {{
+  {
     "id": 1,
     "type": "positive",
     "title": "Test title",
     "description": "What is being tested",
     "expected_result": "Expected outcome",
     "steps": ["Step 1", "Step 2"]
-  }}
+  }
 ]
 
 Return ONLY the JSON array, no explanation, no markdown.
@@ -353,11 +364,7 @@ Return ONLY the JSON array, no explanation, no markdown.
         test_cases = json.loads(text[start:end])
         
         print(f" Generated {len(test_cases)} test cases")
-        
         return test_cases
-
-        with open("test_cases.json", "w") as f:
-            json.dump(test_cases, f)
         
     except json.JSONDecodeError as e:
         print(f" Failed to parse LLM response as JSON: {e}")

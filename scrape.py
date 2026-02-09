@@ -340,32 +340,52 @@ Use this exact JSON schema:
 Return ONLY the JSON array, no explanation, no markdown.
 """
     
+    min_tests = int(coverage_label.split("-")[0])
+
     try:
         print(f" Generating {coverage_label} test cases with {MODEL_NAME}...")
-        
-        resp = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.4,
-        )
-        
-        text = resp.choices[0].message.content
-        
-        # Extract JSON from response
-        start = text.find("[")
-        end = text.rfind("]") + 1
-        
-        if start == -1 or end == 0:
-            raise ValueError("Model did not return a JSON array")
-        
-        test_cases = json.loads(text[start:end])
-        
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        # Allow up to 2 attempts: retry if model returns too few tests
+        for attempt in range(2):
+            resp = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=messages,
+                temperature=0.4,
+            )
+
+            text = resp.choices[0].message.content
+
+            # Extract JSON from response
+            start = text.find("[")
+            end = text.rfind("]") + 1
+
+            if start == -1 or end == 0:
+                raise ValueError("Model did not return a JSON array")
+
+            test_cases = json.loads(text[start:end])
+
+            if len(test_cases) >= min_tests:
+                break
+
+            if attempt == 0:
+                print(f" Got {len(test_cases)} tests, need at least {min_tests}. Retrying...")
+                messages.append({"role": "assistant", "content": text})
+                messages.append({"role": "user", "content": (
+                    f"You returned only {len(test_cases)} test cases but I need at least {min_tests}. "
+                    "Even for a simple website, generate tests for: page load, title check, "
+                    "link navigation, responsive layout, broken links, 404 handling, meta tags, "
+                    "accessibility basics, and basic content verification. "
+                    "Return the FULL JSON array with at least {} test cases.".format(min_tests)
+                )})
+
         print(f" Generated {len(test_cases)} test cases")
         return test_cases
-        
+
     except json.JSONDecodeError as e:
         print(f" Failed to parse LLM response as JSON: {e}")
         raise ValueError(f"Invalid JSON from LLM: {e}")

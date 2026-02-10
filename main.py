@@ -6,7 +6,7 @@ import streamlit as st
 
 st.set_page_config(
     page_title="Marcus Intelligence",
-    page_icon="E:/ahlul._.ilm/marcus_intelligence_logo.jfif",
+    page_icon="assets/logo.svg",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -37,272 +37,8 @@ refresh_session_if_needed()
 load_user_orgs()
 
 # ─── Global CSS ──────────────────────────────────────────────────────────────
-st.markdown("""
-<style>
-    /* ── Base theme ────────────────────────────────────────── */
-    [data-testid="stAppViewContainer"] {
-        background: linear-gradient(180deg, #0f0c29 0%, #1a1a3e 100%);
-    }
-    [data-testid="stSidebar"] {
-        background: rgba(15, 12, 41, 0.95);
-        border-right: 1px solid rgba(255,255,255,0.06);
-    }
-    [data-testid="stSidebar"] [data-testid="stMarkdown"] p,
-    [data-testid="stSidebar"] [data-testid="stMarkdown"] span,
-    [data-testid="stSidebar"] label {
-        color: #c0c0d8;
-    }
-
-    /* ── Header ───────────────────────────────────────────── */
-    .app-header {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 0.5rem 0 0.2rem 0;
-    }
-    .app-header h1 {
-        font-size: 1.75rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin: 0;
-    }
-    .app-subtitle {
-        color: #808098;
-        font-size: 0.9rem;
-        margin: 0 0 1rem 0;
-    }
-
-    /* ── Sidebar user card ────────────────────────────────── */
-    .sidebar-user {
-        background: linear-gradient(135deg, rgba(102,126,234,0.15), rgba(118,75,162,0.10));
-        border: 1px solid rgba(102,126,234,0.2);
-        border-radius: 12px;
-        padding: 0.8rem 1rem;
-        margin-bottom: 1rem;
-    }
-    .sidebar-user .user-email {
-        color: #e0e0f0;
-        font-weight: 600;
-        font-size: 0.85rem;
-    }
-    .sidebar-user .user-org {
-        color: #a0a0c0;
-        font-size: 0.75rem;
-        margin-top: 2px;
-    }
-
-    /* ── Section labels in sidebar ────────────────────────── */
-    .sidebar-label {
-        color: #707090;
-        font-size: 0.7rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 1.2px;
-        margin: 1.2rem 0 0.4rem 0;
-    }
-
-    /* ── Stat cards row ───────────────────────────────────── */
-    .stat-row {
-        display: flex;
-        gap: 0.75rem;
-        margin: 0.75rem 0 1.25rem 0;
-        flex-wrap: wrap;
-    }
-    .stat-card {
-        flex: 1;
-        min-width: 100px;
-        border-radius: 12px;
-        padding: 1rem 1.2rem;
-        border: 1px solid rgba(255,255,255,0.06);
-    }
-    .stat-card .stat-value {
-        font-size: 1.75rem;
-        font-weight: 800;
-        line-height: 1.2;
-    }
-    .stat-card .stat-label {
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.8px;
-        opacity: 0.7;
-        margin-top: 2px;
-    }
-    .stat-purple { background: linear-gradient(135deg, rgba(102,126,234,0.12), rgba(118,75,162,0.08)); }
-    .stat-purple .stat-value { color: #9b8fff; }
-    .stat-purple .stat-label { color: #9b8fff; }
-    .stat-green  { background: linear-gradient(135deg, rgba(72,199,142,0.12), rgba(72,199,142,0.05)); }
-    .stat-green  .stat-value { color: #48c78e; }
-    .stat-green  .stat-label { color: #48c78e; }
-    .stat-red    { background: linear-gradient(135deg, rgba(255,99,99,0.12), rgba(255,99,99,0.05)); }
-    .stat-red    .stat-value { color: #ff6363; }
-    .stat-red    .stat-label { color: #ff6363; }
-    .stat-blue   { background: linear-gradient(135deg, rgba(54,162,235,0.12), rgba(54,162,235,0.05)); }
-    .stat-blue   .stat-value { color: #36a2eb; }
-    .stat-blue   .stat-label { color: #36a2eb; }
-    .stat-amber  { background: linear-gradient(135deg, rgba(255,183,77,0.12), rgba(255,183,77,0.05)); }
-    .stat-amber  .stat-value { color: #ffb74d; }
-    .stat-amber  .stat-label { color: #ffb74d; }
-
-    /* ── Status badges ────────────────────────────────────── */
-    .badge {
-        display: inline-block;
-        padding: 3px 10px;
-        border-radius: 20px;
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.5px;
-    }
-    .badge-pass { background: rgba(72,199,142,0.15); color: #48c78e; }
-    .badge-fail { background: rgba(255,99,99,0.15); color: #ff6363; }
-    .badge-error { background: rgba(255,183,77,0.15); color: #ffb74d; }
-    .badge-running { background: rgba(54,162,235,0.15); color: #36a2eb; }
-    .badge-pending { background: rgba(160,160,184,0.15); color: #a0a0b8; }
-
-    /* ── Section headers ──────────────────────────────────── */
-    .section-header {
-        color: #e0e0f0;
-        font-size: 1.15rem;
-        font-weight: 700;
-        margin: 1.5rem 0 0.75rem 0;
-        padding-bottom: 0.4rem;
-        border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-
-    /* ── Empty state ──────────────────────────────────────── */
-    .empty-state {
-        text-align: center;
-        padding: 3rem 1rem;
-        color: #808098;
-    }
-    .empty-state .empty-icon {
-        font-size: 2.5rem;
-        margin-bottom: 0.5rem;
-    }
-    .empty-state p {
-        font-size: 0.95rem;
-        margin: 0.2rem 0;
-    }
-    .empty-state .empty-hint {
-        font-size: 0.8rem;
-        color: #606078;
-        margin-top: 0.5rem;
-    }
-
-    /* ── Test case card ───────────────────────────────────── */
-    .tc-card {
-        background: rgba(255,255,255,0.03);
-        border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 10px;
-        padding: 1rem 1.2rem;
-        margin-bottom: 0.6rem;
-    }
-    .tc-card .tc-title {
-        color: #e0e0f0;
-        font-weight: 700;
-        font-size: 0.9rem;
-    }
-    .tc-card .tc-meta {
-        color: #808098;
-        font-size: 0.78rem;
-        margin-top: 2px;
-    }
-
-    /* ── Tab styling ──────────────────────────────────────── */
-    [data-baseweb="tab-list"] {
-        gap: 0;
-        background: rgba(255,255,255,0.02);
-        border-radius: 10px 10px 0 0;
-        border-bottom: 1px solid rgba(255,255,255,0.06);
-        padding: 0 0.5rem;
-    }
-    [data-baseweb="tab"] {
-        font-weight: 700;
-        font-size: 0.85rem;
-        color: #808098;
-        padding: 0.6rem 1.2rem;
-    }
-    [data-baseweb="tab"][aria-selected="true"] {
-        color: #667eea;
-    }
-
-    /* ── Live monitor card ────────────────────────────────── */
-    .monitor-card {
-        background: rgba(54,162,235,0.06);
-        border: 1px solid rgba(54,162,235,0.15);
-        border-radius: 12px;
-        padding: 1.2rem;
-        margin: 0.75rem 0;
-    }
-
-    /* ── Report card ──────────────────────────────────────── */
-    .report-card {
-        background: rgba(255,255,255,0.03);
-        border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin-top: 1rem;
-    }
-    .report-card h3 {
-        color: #e0e0f0;
-        margin: 0 0 0.75rem 0;
-        font-size: 1rem;
-    }
-    .report-card p {
-        color: #c0c0d8;
-        margin: 0.3rem 0;
-        font-size: 0.88rem;
-    }
-
-    /* ── Hide default Streamlit metric styling for cleaner look */
-    [data-testid="stMetric"] {
-        background: rgba(255,255,255,0.02);
-        border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 10px;
-        padding: 0.8rem 1rem;
-    }
-    [data-testid="stMetricLabel"] {
-        color: #808098;
-    }
-    [data-testid="stMetricValue"] {
-        color: #e0e0f0;
-    }
-
-    /* ── Results HTML table ───────────────────────────────── */
-    .results-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.85rem;
-        margin-top: 0.5rem;
-    }
-    .results-table th {
-        padding: 0.6rem 0.75rem;
-        text-align: left;
-        color: #808098;
-        font-weight: 600;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        border-bottom: 1px solid rgba(255,255,255,0.1);
-    }
-    .results-table td {
-        padding: 0.55rem 0.75rem;
-        color: #c0c0d8;
-        border-bottom: 1px solid rgba(255,255,255,0.04);
-    }
-    .results-table tr:hover td {
-        background: rgba(255,255,255,0.03);
-    }
-    .results-table .reason-cell {
-        max-width: 300px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-</style>
-""", unsafe_allow_html=True)
+from styles import get_app_css
+st.markdown(get_app_css(), unsafe_allow_html=True)
 
 
 # ─── Header ──────────────────────────────────────────────────────────────────
@@ -310,7 +46,7 @@ st.markdown("""
 <div class="app-header">
     <h1>Marcus Intelligence</h1>
 </div>
-<p class="app-subtitle">AI-Powered Test Automation Platform</p>
+<p class="app-subtitle">AI-Powered Test Automation &nbsp;&middot;&nbsp; Generate &nbsp;&middot;&nbsp; Execute &nbsp;&middot;&nbsp; Analyze</p>
 """, unsafe_allow_html=True)
 
 
@@ -402,6 +138,57 @@ def compute_status_breakdown(df):
     }
 
 
+def create_styled_bar_chart(labels, values, colors, title=""):
+    """Create a premium-styled Plotly bar chart."""
+    import plotly.graph_objects as go
+
+    fig = go.Figure(data=[
+        go.Bar(
+            x=labels,
+            y=values,
+            marker_color=colors,
+            marker_cornerradius=8,
+            marker_line=dict(width=0),
+            text=values,
+            textposition='outside',
+            textfont=dict(
+                family="Inter, sans-serif",
+                size=12,
+                color="#c0c0d8",
+                weight=600,
+            ),
+            hovertemplate='<b>%{x}</b><br>Count: %{y}<extra></extra>',
+        )
+    ])
+    fig.update_layout(
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, sans-serif", color="#6a6a88", size=12),
+        margin=dict(l=16, r=16, t=24, b=36),
+        height=280,
+        xaxis=dict(
+            color="#6a6a88",
+            gridcolor="rgba(255,255,255,0.03)",
+            showgrid=False,
+            tickfont=dict(size=11, weight=600),
+        ),
+        yaxis=dict(
+            color="#6a6a88",
+            gridcolor="rgba(255,255,255,0.03)",
+            showgrid=True,
+            tickfont=dict(size=10),
+            zeroline=False,
+        ),
+        bargap=0.4,
+        hoverlabel=dict(
+            bgcolor="#1a1a3e",
+            bordercolor="rgba(102,126,234,0.3)",
+            font=dict(family="Inter, sans-serif", color="#e0e0f0", size=12),
+        ),
+    )
+    return fig
+
+
 def render_results_table(df):
     """Render results table with colored status badges via HTML."""
     cols = ['test_id', 'title', 'type', 'status', 'reason']
@@ -448,12 +235,18 @@ with st.sidebar:
     user_email = getattr(user, 'email', 'User')
     org_name = st.session_state.current_org_name or "Personal"
 
+    user_initial = user_email[0].upper() if user_email else "U"
     st.markdown("""
     <div class="sidebar-user">
-        <div class="user-email">{email}</div>
-        <div class="user-org">{org}</div>
+        <div style="display:flex;align-items:center;gap:0.65rem;">
+            <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;color:#fff;flex-shrink:0;">{initial}</div>
+            <div>
+                <div class="user-email">{email}</div>
+                <div class="user-org">{org}</div>
+            </div>
+        </div>
     </div>
-    """.format(email=user_email, org=org_name), unsafe_allow_html=True)
+    """.format(initial=user_initial, email=user_email, org=org_name), unsafe_allow_html=True)
 
     # Org switcher
     st.markdown('<div class="sidebar-label">Workspace</div>', unsafe_allow_html=True)
@@ -491,7 +284,7 @@ with st.sidebar:
 
 
 # ─── Tabs ────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4 = st.tabs(["Generate", "Execute", "Results", "Export"])
+tab1, tab2, tab3, tab4 = st.tabs(["Generate Tests", "Execute", "Results", "Export"])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -643,8 +436,14 @@ with tab2:
     if not pending_runs:
         st.markdown("""
         <div class="empty-state">
-            <div class="empty-icon">&#128270;</div>
-            <p>No test runs available</p>
+            <div class="empty-svg">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="80" height="80">
+                    <defs><linearGradient id="esg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#667eea"/><stop offset="100%" stop-color="#764ba2"/></linearGradient></defs>
+                    <circle cx="50" cy="50" r="28" stroke="url(#esg)" stroke-width="3" fill="none" opacity="0.6"/>
+                    <line x1="70" y1="70" x2="95" y2="95" stroke="url(#esg)" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+                </svg>
+            </div>
+            <p class="empty-title">No test runs available</p>
             <p class="empty-hint">Generate tests first in the Generate tab</p>
         </div>
         """, unsafe_allow_html=True)
@@ -749,7 +548,7 @@ with tab2:
             uptime = time.time() - st.session_state.start_time
 
             st.markdown('<div class="monitor-card">', unsafe_allow_html=True)
-            st.markdown('<div class="section-header" style="margin-top:0; border:none;">Live Monitor</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-header" style="margin-top:0;border:none;padding-bottom:0.3rem;">Live Monitor &nbsp;<span class="badge badge-running">RUNNING</span></div>', unsafe_allow_html=True)
 
             # Read enriched progress data
             prog_data = {}
@@ -857,8 +656,16 @@ with tab3:
         else:
             st.markdown("""
             <div class="empty-state">
-                <div class="empty-icon">&#128202;</div>
-                <p>No test results yet</p>
+                <div class="empty-svg">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="80" height="80">
+                        <defs><linearGradient id="ecg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#667eea"/><stop offset="100%" stop-color="#764ba2"/></linearGradient></defs>
+                        <rect x="20" y="70" width="16" height="30" rx="3" fill="url(#ecg)" opacity="0.3"/>
+                        <rect x="42" y="45" width="16" height="55" rx="3" fill="url(#ecg)" opacity="0.45"/>
+                        <rect x="64" y="55" width="16" height="45" rx="3" fill="url(#ecg)" opacity="0.6"/>
+                        <rect x="86" y="30" width="16" height="70" rx="3" fill="url(#ecg)" opacity="0.4"/>
+                    </svg>
+                </div>
+                <p class="empty-title">No test results yet</p>
                 <p class="empty-hint">Run tests first in the Execute tab to see results here</p>
             </div>
             """, unsafe_allow_html=True)
@@ -895,17 +702,36 @@ with tab3:
             st.markdown(stat_cards_html(cards), unsafe_allow_html=True)
 
             # Charts
+            STATUS_COLORS = {
+                "PASS": "#34d399", "FAIL": "#f87171", "ERROR": "#fbbf24",
+                "TIMEOUT": "#fbbf24", "JSON_ERROR": "#fbbf24", "NO_JSON": "#fbbf24",
+                "RUNNING": "#60a5fa", "PENDING": "#9090aa",
+            }
+            TYPE_COLORS = {
+                "positive": "#34d399", "negative": "#f87171", "edge": "#fbbf24",
+            }
+
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown('<div class="section-header">By Status</div>', unsafe_allow_html=True)
                 status_counts = df['status'].value_counts()
-                st.bar_chart(status_counts)
+                fig = create_styled_bar_chart(
+                    labels=status_counts.index.tolist(),
+                    values=status_counts.values.tolist(),
+                    colors=[STATUS_COLORS.get(s, "#808098") for s in status_counts.index],
+                )
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
             with col2:
                 if 'type' in df.columns:
                     st.markdown('<div class="section-header">By Type</div>', unsafe_allow_html=True)
                     type_counts = df['type'].value_counts()
-                    st.bar_chart(type_counts)
+                    fig = create_styled_bar_chart(
+                        labels=type_counts.index.tolist(),
+                        values=type_counts.values.tolist(),
+                        colors=[TYPE_COLORS.get(t, "#808098") for t in type_counts.index],
+                    )
+                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
             # Detailed table with status badges
             st.markdown('<div class="section-header">Test Details</div>', unsafe_allow_html=True)
@@ -924,8 +750,15 @@ with tab4:
     if not completed_runs:
         st.markdown("""
         <div class="empty-state">
-            <div class="empty-icon">&#128230;</div>
-            <p>No completed runs to export</p>
+            <div class="empty-svg">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="80" height="80">
+                    <defs><linearGradient id="eeg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#667eea"/><stop offset="100%" stop-color="#764ba2"/></linearGradient></defs>
+                    <rect x="30" y="25" width="60" height="75" rx="6" stroke="url(#eeg)" stroke-width="2.5" fill="none" opacity="0.4"/>
+                    <line x1="60" y1="58" x2="60" y2="82" stroke="url(#eeg)" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+                    <polyline points="50,72 60,82 70,72" stroke="url(#eeg)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+                </svg>
+            </div>
+            <p class="empty-title">No completed runs to export</p>
             <p class="empty-hint">Complete a test run first to export results</p>
         </div>
         """, unsafe_allow_html=True)
@@ -973,19 +806,19 @@ with tab4:
             b = compute_status_breakdown(df)
 
             report_lines = [
-                "<p><strong>Run:</strong> #{}</p>".format(selected_export_run['id']),
-                "<p><strong>URL:</strong> {}</p>".format(selected_export_run.get('url') or 'BRD Only'),
-                "<p><strong>Total Tests:</strong> {}</p>".format(b["total"]),
-                "<p><strong>Passed:</strong> {} ({:.1f}%)</p>".format(b["passed"], b["pass_rate"]),
-                "<p><strong>Failed:</strong> {}</p>".format(b["failed"]),
+                "<p><strong>Run</strong> <span style='color:var(--text-1);'>#{}</span></p>".format(selected_export_run['id']),
+                "<p><strong>URL</strong> <span style='color:var(--text-1);'>{}</span></p>".format(selected_export_run.get('url') or 'BRD Only'),
+                "<p><strong>Total Tests</strong> <span style='color:var(--text-1);'>{}</span></p>".format(b["total"]),
+                "<p><strong>Passed</strong> <span style='color:var(--pass);'>{} ({:.1f}%)</span></p>".format(b["passed"], b["pass_rate"]),
+                "<p><strong>Failed</strong> <span style='color:var(--fail);'>{}</span></p>".format(b["failed"]),
             ]
             if b["timeout"] > 0:
-                report_lines.append("<p><strong>Timeout:</strong> {}</p>".format(b["timeout"]))
+                report_lines.append("<p><strong>Timeout</strong> <span style='color:var(--amber);'>{}</span></p>".format(b["timeout"]))
             if b["errors"] > 0:
-                report_lines.append("<p><strong>Errors:</strong> {}</p>".format(b["errors"]))
+                report_lines.append("<p><strong>Errors</strong> <span style='color:var(--amber);'>{}</span></p>".format(b["errors"]))
             if b["json_err"] > 0:
-                report_lines.append("<p><strong>Parse Issues:</strong> {}</p>".format(b["json_err"]))
-            report_lines.append("<p><strong>Generated:</strong> {}</p>".format(
+                report_lines.append("<p><strong>Parse Issues</strong> <span style='color:var(--amber);'>{}</span></p>".format(b["json_err"]))
+            report_lines.append("<p><strong>Generated</strong> <span style='color:var(--text-3);'>{}</span></p>".format(
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
 
             st.markdown("""

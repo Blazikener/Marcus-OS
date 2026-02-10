@@ -309,7 +309,7 @@ CONTENT SAMPLE:
 
 """
 
-    # ✅ CRITICAL: ACTIVATE source + instruction params (3 lines added)
+    # CRITICAL: ACTIVATE source + instruction params (3 lines added)
     if source:
         user_prompt += f"\n\nADDITIONAL SOURCES (BRD/Requirements):\n{json.dumps(source, indent=2)}"
     if instruction:

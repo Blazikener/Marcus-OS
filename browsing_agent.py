@@ -10,6 +10,50 @@ import time
 import tempfile
 from datetime import datetime
 from dotenv import load_dotenv
+
+# ─── Windows fix: browser-use hardcodes Path('/tmp/...') for downloads ────────
+# On Windows, /tmp resolves to \tmp on the current drive root, which is typically
+# not writable. browser-use creates BrowserProfile() at module-load time in
+# session.py, which calls Path('/tmp/browser-use-downloads-<uuid>').mkdir().
+# Fix: (1) monkey-patch Path.mkdir to redirect /tmp/browser-use-* to system temp
+#      (2) patch the Pydantic model validator to store the correct path too.
+# Both patches are needed: mkdir for the immediate error, validator for the
+# stored downloads_path used later by Playwright.
+if sys.platform.startswith('win'):
+    from pathlib import Path as _Path
+    import importlib
+    import uuid as _uuid
+
+    _real_tmp = tempfile.gettempdir()
+
+    # Patch 1: redirect mkdir calls for /tmp/browser-use-* to system temp
+    _orig_mkdir = _Path.mkdir
+
+    def _patched_mkdir(self, mode=0o777, parents=False, exist_ok=False):
+        s = str(self)
+        if os.sep + 'tmp' + os.sep + 'browser-use' in s:
+            redirected = _Path(_real_tmp) / self.name
+            return _orig_mkdir(redirected, mode=mode, parents=parents, exist_ok=exist_ok)
+        return _orig_mkdir(self, mode=mode, parents=parents, exist_ok=exist_ok)
+
+    _Path.mkdir = _patched_mkdir
+
+    # Patch 2: replace the validator so stored downloads_path is in system temp
+    _profile = importlib.import_module('browser_use.browser.profile')
+
+    def _fixed_downloads_validator(self):
+        if self.downloads_path is None:
+            _uid = str(_uuid.uuid4())[:8]
+            _dl = _Path(_real_tmp) / f'browser-use-downloads-{_uid}'
+            while _dl.exists():
+                _uid = str(_uuid.uuid4())[:8]
+                _dl = _Path(_real_tmp) / f'browser-use-downloads-{_uid}'
+            self.downloads_path = _dl
+            self.downloads_path.mkdir(parents=True, exist_ok=True)
+        return self
+
+    _profile.BrowserProfile.set_default_downloads_path = _fixed_downloads_validator
+
 from browser_use import Agent, ChatOpenAI
 
 
@@ -216,11 +260,36 @@ FAIL: {{"verdict": "FAIL", "reason": "Button 'Login' not visible", "final_url": 
 
         # Parse JSON from agent output (skip if already timed out)
         if status != "TIMEOUT":
-            parsed = extract_json_from_text(result_str)
+            # 1. Extract final content from the last completed action (clean string)
+            final_content = ""
+            last_judgement = None
+            for ar in reversed(result.action_results()):
+                if ar.is_done:
+                    if ar.extracted_content:
+                        final_content = ar.extracted_content
+                    if ar.judgement is not None:
+                        last_judgement = ar.judgement
+                    break
+
+            # 2. Try JSON from extracted_content first (clean, no repr noise)
+            parsed = extract_json_from_text(final_content) if final_content else None
+
+            # 3. Fall back to full str(result) if extracted_content had no JSON
+            if parsed is None:
+                parsed = extract_json_from_text(result_str)
+
             if parsed is not None:
                 status = parsed.get("verdict", "FAIL")
                 reason = parsed.get("reason", "No reason in JSON")
                 final_url = parsed.get("final_url", "")
+            elif last_judgement is not None:
+                # 4. No JSON anywhere — use the agent's own judgement
+                if last_judgement.verdict:
+                    status = "PASS"
+                else:
+                    status = "FAIL"
+                reason = last_judgement.failure_reason or last_judgement.reasoning or "No reason provided"
+                reason = reason[:300]
             else:
                 status = "NO_JSON"
                 reason = "No JSON found: {}".format(result_str[:200])

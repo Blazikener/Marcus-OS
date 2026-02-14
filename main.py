@@ -27,6 +27,7 @@ from auth import (
     load_user_orgs, refresh_session_if_needed,
 )
 
+
 load_dotenv()
 
 # ─── Auth Gate ───────────────────────────────────────────────────────────────

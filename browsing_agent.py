@@ -5,6 +5,7 @@ Browser Agent — executes generated test cases via browser-use Agent.
 import asyncio
 import json
 import os
+import re
 import sys
 import time
 import tempfile
@@ -144,6 +145,32 @@ def extract_json_from_text(text: str):
         start_idx = start + 1
 
 
+def extract_target_url(test: dict) -> str:
+    """Extract the target URL from test steps (first URL found)."""
+    for step in test.get('steps', []):
+        match = re.search(r'https?://[^\s\'"<>]+', step)
+        if match:
+            return match.group(0).rstrip('.,;)')
+    return ""
+
+
+def build_execution_log(result, max_length=2000) -> str:
+    """Build human-readable step log from AgentHistoryList."""
+    lines = []
+    try:
+        for i, ar in enumerate(result.action_results(), 1):
+            if ar.error:
+                lines.append(f"Step {i}: ERROR - {str(ar.error)[:100]}")
+            elif ar.extracted_content:
+                lines.append(f"Step {i}: {ar.extracted_content[:150]}")
+            elif ar.is_done:
+                lines.append(f"Step {i}: DONE")
+    except Exception:
+        return str(result)[:max_length]
+    log = "\n".join(lines)
+    return log[:max_length] if log else str(result)[:max_length]
+
+
 def get_service_client():
     """Get Supabase client with service role key (bypasses RLS).
     Returns None if credentials are not available (legacy/standalone mode).
@@ -172,7 +199,7 @@ def save_result_to_supabase(supa, result: dict):
             "status": result.get("status"),
             "reason": result.get("reason"),
             "final_url": result.get("final_url"),
-            "execution_log": result.get("execution_log", "")[:1000],
+            "execution_log": result.get("execution_log", "")[:2000],
         }).execute()
     except Exception as e:
         print(f"[{ts()}][SUPABASE] Failed to save result: {e}")
@@ -222,21 +249,31 @@ async def execute_single_test(test: dict, test_id: int, total_tests: int,
     test_title = test.get('title', 'Unknown')
     print(f"[{ts()}][TEST {test_id}] Starting: {test_title}")
 
-    task_prompt = f"""
-Test ID: TC{test.get('id', 0)}
-Title: {test_title}
-Type: {test.get('type', 'positive').upper()}
-Expected: {test.get('expected_result', 'Manual Check Needed')}
+    target_url = extract_target_url(test)
+    test_type = test.get('type', 'positive').upper()
 
-Execute EXACTLY these steps:
+    negative_guidance = ""
+    if test_type == "NEGATIVE":
+        negative_guidance = "\nThis is a NEGATIVE test: PASS means the bad/unexpected behavior was correctly PREVENTED or the error was handled gracefully.\n"
+
+    task_prompt = f"""You are a QA test executor. Your browser starts on a BLANK page.
+
+**TARGET URL: {target_url}**
+**YOUR FIRST ACTION MUST BE: navigate to {target_url}**
+Do NOT wait or observe the blank page. Navigate immediately.
+
+Test: TC{test.get('id', 0)} — {test_title}
+Type: {test_type}
+Expected: {test.get('expected_result', 'Manual Check Needed')}
+{negative_guidance}
+Steps:
 {chr(10).join(f"{i+1}. {step}" for i, step in enumerate(test.get('steps', [])))}
 
-AFTER steps COMPLETE, return **JSON ONLY** (no other text):
+After completing ALL steps, return ONLY this JSON (no other text):
+{{"verdict": "PASS or FAIL", "reason": "1 sentence explaining what you observed", "final_url": "the current URL"}}
 
-{{"verdict": "PASS", "reason": "1 sentence why", "final_url": "browser.url"}}
-
-PASS: {{"verdict": "PASS", "reason": "Found/clicked login -> dashboard loaded", "final_url": "https://site.com/dashboard"}}
-FAIL: {{"verdict": "FAIL", "reason": "Button 'Login' not visible", "final_url": "https://site.com"}}
+PASS means the expected result WAS observed.
+FAIL means the expected result was NOT observed.
 """
 
     llm = ChatOpenAI(model="gpt-4o-mini")
@@ -245,10 +282,10 @@ FAIL: {{"verdict": "FAIL", "reason": "Button 'Login' not visible", "final_url": 
 
     try:
         print(f"[{ts()}][TEST {test_id}] Executing with {timeout}s timeout...")
-        agent = Agent(task=task_prompt, llm=llm, max_failures=2)
+        agent = Agent(task=task_prompt, llm=llm, max_failures=4)
 
         try:
-            result = await asyncio.wait_for(agent.run(max_steps=25), timeout=float(timeout))
+            result = await asyncio.wait_for(agent.run(max_steps=15), timeout=float(timeout))
             result_str = str(result) if hasattr(result, '__str__') else repr(result)
             needs_cleanup = False  # agent.run() already called close() on success
         except asyncio.TimeoutError:
@@ -303,7 +340,7 @@ FAIL: {{"verdict": "FAIL", "reason": "Button 'Login' not visible", "final_url": 
             "status": status,
             "reason": reason,
             "final_url": final_url,
-            "execution_log": result_str[:1000],
+            "execution_log": build_execution_log(result) if status != "TIMEOUT" else "TIMEOUT",
             "timestamp": datetime.now().isoformat()
         }
 
@@ -316,7 +353,7 @@ FAIL: {{"verdict": "FAIL", "reason": "Button 'Login' not visible", "final_url": 
             "type": test.get("type"),
             "status": "ERROR",
             "reason": "Exception: {}".format(str(e)[:300]),
-            "execution_log": result_str[:1000] if result_str else "",
+            "execution_log": str(e)[:500],
             "final_url": "",
             "timestamp": datetime.now().isoformat()
         }
@@ -406,7 +443,7 @@ async def main():
                       current_test_title=test_title if loop_status == "running" else None,
                       test_start_time=test_start if loop_status == "running" else None)
         print(f"[{ts()}][PROGRESS] {i + 1}/{total_tests} - {result['status']}")
-        await asyncio.sleep(2)  # Brief pause between tests
+        await asyncio.sleep(8)  # Pause between tests to avoid OpenAI rate limits
 
     passed = sum(1 for r in results if r['status'] == 'PASS')
     failed = sum(1 for r in results if r['status'] == 'FAIL')

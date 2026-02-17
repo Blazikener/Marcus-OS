@@ -26,7 +26,7 @@ load_dotenv()
 
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-mini")  
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
 
 @dataclass
@@ -119,6 +119,21 @@ def scrape_website(url: str) -> str:
     except requests.HTTPError as e:
         print(f" HTTP error {e.response.status_code}: {url}")
         raise
+    except requests.exceptions.SSLError:
+        print(f" SSL error for {url}, retrying without verification...")
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        response = requests.get(
+            url,
+            headers=headers,
+            timeout=30,
+            allow_redirects=True,
+            verify=False
+        )
+        response.raise_for_status()
+        html = response.text
+        print(f" Loaded {len(html):,} chars (SSL verification disabled)")
+        return html
     except Exception as e:
         print(f" Error scraping {url}: {e}")
         raise
@@ -239,7 +254,36 @@ def extract_website_intelligence(html: str, url: str) -> ExtractedWebsiteData:
     )
 
 
-def generate_test_cases(source: Dict, instruction: str, extracted: ExtractedWebsiteData, coverage: str) -> List[Dict]:
+def aggregate_crawl_data(pages: List[Dict], token_budget: int = 12000) -> str:
+    """
+    Merge HTML from multiple crawled pages into a single string within a token budget.
+
+    Args:
+        pages: List of dicts with 'url' and 'html' keys from CrawlResult.pages
+        token_budget: Approximate max tokens (~4 chars/token) for the combined output
+
+    Returns:
+        Combined HTML string with page separators
+    """
+    char_budget = token_budget * 4
+    combined = []
+    used = 0
+
+    for page in pages:
+        url = page.get("url", "")
+        html = page.get("html", "")
+        header = f"\n<!-- PAGE: {url} -->\n"
+        available = char_budget - used - len(header)
+        if available <= 0:
+            break
+        chunk = html[:available]
+        combined.append(header + chunk)
+        used += len(header) + len(chunk)
+
+    return "".join(combined)
+
+
+def generate_test_cases(source: Dict, instruction: str, extracted: ExtractedWebsiteData, coverage: str, site_map: Optional[Dict[str, List[str]]] = None) -> List[Dict]:
     """
     Generate test cases using OpenAI from Web + BRD + Instructions.
     
@@ -314,6 +358,11 @@ CONTENT SAMPLE:
         user_prompt += f"\n\nADDITIONAL SOURCES (BRD/Requirements):\n{json.dumps(source, indent=2)}"
     if instruction:
         user_prompt += f"\n\nCUSTOM PRIORITIES:\n{instruction}"
+    if site_map:
+        user_prompt += "\n\nSITE MAP (page → linked pages):\n"
+        for parent, children in list(site_map.items())[:30]:
+            user_prompt += f"  {parent} → {', '.join(children[:10])}\n"
+        user_prompt += "\nGenerate cross-page navigation tests that verify links between these pages work correctly."
     user_prompt += "\n\n"
 
     user_prompt += """

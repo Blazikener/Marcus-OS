@@ -18,8 +18,9 @@ import json
 import time
 import pandas as pd
 from datetime import datetime
-from scrape import scrape_website, extract_website_intelligence, generate_test_cases
+from scrape import scrape_website, extract_website_intelligence, generate_test_cases, aggregate_crawl_data
 from scrape import ExtractedWebsiteData
+from crawler import crawl_website
 import jsonschema
 from dotenv import load_dotenv
 from auth import (
@@ -302,6 +303,22 @@ with tab1:
     with col2:
         mode = st.selectbox("Mode", ["Hybrid (Web+BRD)", "Web Only", "BRD Only"])
 
+    deep_crawl_enabled = st.checkbox("Enable Deep Crawl", value=False,
+                                     help="Crawl multiple pages instead of just the homepage. Supports login-protected sites.")
+
+    if deep_crawl_enabled:
+        crawl_col1, crawl_col2 = st.columns(2)
+        with crawl_col1:
+            max_pages = st.slider("Max Pages", min_value=1, max_value=50, value=20)
+        with crawl_col2:
+            max_depth = st.slider("Max Depth", min_value=1, max_value=3, value=2)
+
+        with st.expander("Login Required?"):
+            login_url = st.text_input("Login Page URL", placeholder="https://your-site.com/login",
+                                      help="Leave empty if no login is needed")
+            login_username = st.text_input("Username / Email", placeholder="user@example.com")
+            login_password = st.text_input("Password", type="password")
+
     brd_file = st.file_uploader("Upload BRD / Requirements Document", type=['pdf', 'txt', 'docx'],
                                 help="Upload PDF, TXT, or DOCX for requirements-based tests")
     instructions = st.text_area("Custom Instructions (optional)",
@@ -330,12 +347,47 @@ with tab1:
                 st.success("Extracted {} chars from BRD".format(len(brd_text)))
 
             # Handle website
+            site_map = None
             if url and mode != "BRD Only":
                 url = url if url.startswith(('http://', 'https://')) else "https://" + url
-                with st.spinner("Scraping website..."):
-                    html = scrape_website(url)
-                with st.spinner("Analyzing page structure..."):
-                    extracted = extract_website_intelligence(html, url)
+
+                if deep_crawl_enabled:
+                    crawl_login_url = login_url.strip() if login_url.strip() else None
+                    crawl_username = login_username.strip() if login_username.strip() else None
+                    crawl_password = login_password if login_password else None
+
+                    with st.status("Deep crawling website...", expanded=True) as status:
+                        st.write("Starting crawl of {}".format(url))
+
+                        crawl_result = crawl_website(
+                            start_url=url,
+                            max_pages=max_pages,
+                            max_depth=max_depth,
+                            login_url=crawl_login_url,
+                            login_username=crawl_username,
+                            login_password=crawl_password,
+                        )
+
+                        if crawl_result.errors:
+                            for err in crawl_result.errors[:5]:
+                                st.warning(err)
+                        if crawl_login_url and crawl_result.login_success:
+                            st.write("Login successful")
+                        elif crawl_login_url:
+                            st.warning("Login may have failed — crawl continued without auth")
+
+                        status.update(label="Crawled {} pages".format(len(crawl_result.pages)), state="complete")
+
+                    site_map = crawl_result.site_map
+                    with st.spinner("Aggregating crawl data..."):
+                        aggregated_html = aggregate_crawl_data(crawl_result.pages)
+                    with st.spinner("Analyzing page structure..."):
+                        extracted = extract_website_intelligence(aggregated_html, url)
+                else:
+                    with st.spinner("Scraping website..."):
+                        html = scrape_website(url)
+                    with st.spinner("Analyzing page structure..."):
+                        extracted = extract_website_intelligence(html, url)
 
             # Dummy extracted for BRD-only mode
             if extracted is None:
@@ -351,7 +403,8 @@ with tab1:
                     source=source,
                     instruction=instructions or "",
                     extracted=extracted,
-                    coverage=coverage
+                    coverage=coverage,
+                    site_map=site_map,
                 )
 
             # Save to Supabase

@@ -8,6 +8,8 @@ Supports Web URL + BRD documents + Custom Instructions.
 import time
 import re
 import json
+import socket
+import ipaddress
 from dataclasses import dataclass, field
 from typing import List, Dict, Tuple, Optional
 from urllib.parse import urlparse
@@ -15,14 +17,18 @@ import os
 
 
 import requests
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from bs4 import BeautifulSoup
 from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 from dotenv import load_dotenv
 import pypdf
 
+from logger import get_logger
 
 load_dotenv()
+
+logger = get_logger(__name__)
 
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -45,31 +51,45 @@ class ExtractedWebsiteData:
 
 def validate_and_normalize_url(url: str) -> Tuple[bool, str]:
     """
-    Validate and normalize URL.
-    
+    Validate and normalize URL. Blocks private/reserved/loopback IPs (SSRF protection).
+
     Args:
         url: Input URL string
-        
+
     Returns:
         (is_valid, normalized_url) tuple
     """
     if not url or not url.strip():
         return False, ""
-    
+
     url = url.strip()
-    
+
     # Add https:// if no protocol
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
-    
+
     # Validate URL format
     try:
         parsed = urlparse(url)
         if not parsed.netloc:
             return False, ""
-        return True, url
     except Exception:
         return False, ""
+
+    # Resolve hostname and block private/reserved IPs
+    try:
+        hostname = parsed.hostname
+        if not hostname:
+            return False, ""
+        for info in socket.getaddrinfo(hostname, None):
+            ip = ipaddress.ip_address(info[4][0])
+            if ip.is_private or ip.is_reserved or ip.is_loopback or ip.is_link_local:
+                logger.warning("SSRF blocked: %s resolves to private/reserved IP %s", url, ip)
+                return False, ""
+    except (socket.gaierror, ValueError):
+        return False, ""
+
+    return True, url
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=10))
@@ -87,7 +107,7 @@ def scrape_website(url: str) -> str:
         requests.Timeout: If request times out
         requests.RequestException: If request fails
     """
-    print(f" Loading website: {url}")
+    logger.info("Loading website: %s", url)
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -110,32 +130,33 @@ def scrape_website(url: str) -> str:
         
         html = response.text
         
-        print(f" Successfully loaded {len(html):,} characters")
+        logger.info("Successfully loaded %s characters", f"{len(html):,}")
         return html
         
     except requests.Timeout:
-        print(f" Timeout loading {url}")
+        logger.warning("Timeout loading %s", url)
         raise
     except requests.HTTPError as e:
-        print(f" HTTP error {e.response.status_code}: {url}")
+        logger.warning("HTTP error %d: %s", e.response.status_code, url)
         raise
     except requests.exceptions.SSLError:
-        print(f" SSL error for {url}, retrying without verification...")
-        import urllib3
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        response = requests.get(
-            url,
-            headers=headers,
-            timeout=30,
-            allow_redirects=True,
-            verify=False
-        )
+        logger.warning("SSL error for %s, retrying without verification", url)
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=InsecureRequestWarning)
+            response = requests.get(
+                url,
+                headers=headers,
+                timeout=30,
+                allow_redirects=True,
+                verify=False
+            )
         response.raise_for_status()
         html = response.text
-        print(f" Loaded {len(html):,} chars (SSL verification disabled)")
+        logger.info("Loaded %s chars (SSL verification disabled)", f"{len(html):,}")
         return html
     except Exception as e:
-        print(f" Error scraping {url}: {e}")
+        logger.error("Error scraping %s: %s", url, e)
         raise
 
 
@@ -239,7 +260,7 @@ def extract_website_intelligence(html: str, url: str) -> ExtractedWebsiteData:
         dom_structure = "{}"
         errors.append(f"DOM structure: {e}")
     
-    print(f" Extracted: {len(forms)} forms, {len(buttons)} buttons, {len(features)} features")
+    logger.info("Extracted: %d forms, %d buttons, %d features", len(forms), len(buttons), len(features))
     
     return ExtractedWebsiteData(
         url=url,
@@ -392,7 +413,7 @@ Return ONLY the JSON array, no explanation, no markdown.
     min_tests = int(coverage_label.split("-")[0])
 
     try:
-        print(f" Generating {coverage_label} test cases with {MODEL_NAME}...")
+        logger.info("Generating %s test cases with %s...", coverage_label, MODEL_NAME)
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -422,7 +443,7 @@ Return ONLY the JSON array, no explanation, no markdown.
                 break
 
             if attempt == 0:
-                print(f" Got {len(test_cases)} tests, need at least {min_tests}. Retrying...")
+                logger.info("Got %d tests, need at least %d. Retrying...", len(test_cases), min_tests)
                 messages.append({"role": "assistant", "content": text})
                 messages.append({"role": "user", "content": (
                     f"You returned only {len(test_cases)} test cases but I need at least {min_tests}. "
@@ -432,12 +453,12 @@ Return ONLY the JSON array, no explanation, no markdown.
                     "Return the FULL JSON array with at least {} test cases.".format(min_tests)
                 )})
 
-        print(f" Generated {len(test_cases)} test cases")
+        logger.info("Generated %d test cases", len(test_cases))
         return test_cases
 
     except json.JSONDecodeError as e:
-        print(f" Failed to parse LLM response as JSON: {e}")
+        logger.error("Failed to parse LLM response as JSON: %s", e)
         raise ValueError(f"Invalid JSON from LLM: {e}")
     except Exception as e:
-        print(f" Test generation failed: {e}")
+        logger.error("Test generation failed: %s", e)
         raise

@@ -16,6 +16,7 @@ import sys
 import os
 import json
 import time
+import html
 import pandas as pd
 from datetime import datetime
 from scrape import scrape_website, extract_website_intelligence, generate_test_cases, aggregate_crawl_data
@@ -25,17 +26,24 @@ import jsonschema
 from dotenv import load_dotenv
 from auth import (
     init_session_state, require_auth, sign_out, get_authenticated_client,
-    load_user_orgs, refresh_session_if_needed,
+    load_user_orgs,
 )
 
 
 load_dotenv()
 
+
+def run_file(name: str, run_id=None) -> str:
+    """Return run-scoped filename: run_{id}_{name} or just {name} if no run_id."""
+    if run_id:
+        return f"run_{run_id}_{name}"
+    return name
+
+
 # ─── Auth Gate ───────────────────────────────────────────────────────────────
 require_auth()
 
 # ─── User is authenticated from here on ─────────────────────────────────────
-refresh_session_if_needed()
 load_user_orgs()
 
 # ─── Global CSS ──────────────────────────────────────────────────────────────
@@ -67,11 +75,9 @@ if 'last_return_code' not in st.session_state:
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
-def get_org_test_runs():
-    """Get test runs for the current org, newest first."""
-    org_id = st.session_state.current_org_id
-    if not org_id:
-        return []
+@st.cache_data(ttl=10)
+def _cached_org_test_runs(org_id: str):
+    """Get test runs for the given org, newest first. Cached for 10s."""
     client = get_authenticated_client()
     try:
         response = client.table("test_runs") \
@@ -82,6 +88,14 @@ def get_org_test_runs():
         return response.data or []
     except Exception:
         return []
+
+
+def get_org_test_runs():
+    """Get test runs for the current org, newest first."""
+    org_id = st.session_state.current_org_id
+    if not org_id:
+        return []
+    return _cached_org_test_runs(str(org_id))
 
 
 def get_run_results(run_id: int):
@@ -106,7 +120,7 @@ def status_badge(status: str) -> str:
           "badge-running" if s == "RUNNING" else \
           "badge-error" if s in ("ERROR", "TIMEOUT", "JSON_ERROR", "NO_JSON") else \
           "badge-pending"
-    return '<span class="badge {}">{}</span>'.format(cls, s)
+    return '<span class="badge {}">{}</span>'.format(cls, html.escape(s))
 
 
 def stat_cards_html(cards: list) -> str:
@@ -248,7 +262,7 @@ with st.sidebar:
             </div>
         </div>
     </div>
-    """.format(initial=user_initial, email=user_email, org=org_name), unsafe_allow_html=True)
+    """.format(initial=html.escape(user_initial), email=html.escape(user_email), org=html.escape(org_name)), unsafe_allow_html=True)
 
     # Org switcher
     st.markdown('<div class="sidebar-label">Workspace</div>', unsafe_allow_html=True)
@@ -343,7 +357,7 @@ with tab1:
                 else:
                     brd_text = brd_file.read().decode('utf-8')
 
-                source = {"brd_content": brd_text[:-1]}
+                source = {"brd_content": brd_text.rstrip()}
                 st.success("Extracted {} chars from BRD".format(len(brd_text)))
 
             # Handle website
@@ -419,11 +433,14 @@ with tab1:
                 "status": "pending",
             }).execute()
 
+            if not run_response.data:
+                st.error("Failed to create test run in database.")
+                st.stop()
             run_id = run_response.data[0]["id"]
             st.session_state.current_run_id = run_id
 
             # Also write locally for subprocess
-            with open("tests.json", "w", encoding='utf-8') as f:
+            with open(run_file("tests.json", run_id), "w", encoding='utf-8') as f:
                 json.dump(tests, f, ensure_ascii=False, indent=2)
 
             sources_used = []
@@ -434,6 +451,7 @@ with tab1:
 
             if len(tests) == 0:
                 st.warning("No test cases were generated. The website may be too minimal. Try a different URL or add a BRD document.")
+                st.stop()
             else:
                 st.session_state.tests_generated = True
                 st.success("Generated {} test cases (Run #{})  |  Sources: {}".format(
@@ -444,8 +462,10 @@ with tab1:
             st.exception(e)
 
     # Show test metrics if tests were generated
-    if st.session_state.tests_generated and os.path.exists("tests.json"):
-        with open("tests.json", "r") as f:
+    run_id = st.session_state.current_run_id
+    tests_file = run_file("tests.json", run_id)
+    if st.session_state.tests_generated and os.path.exists(tests_file):
+        with open(tests_file, "r", encoding="utf-8") as f:
             tests = json.load(f)
 
         pos = sum(1 for t in tests if t.get("type") == "positive")
@@ -539,22 +559,41 @@ with tab2:
                 st.success("{} tests validated".format(len(tests)))
 
                 # Write tests locally for the subprocess
-                with open("tests.json", "w", encoding='utf-8') as f:
+                run_id = run_data['id']
+                with open(run_file("tests.json", run_id), "w", encoding='utf-8') as f:
                     json.dump(tests, f, ensure_ascii=False, indent=2)
 
-                # Spawn subprocess with multi-tenancy env vars
-                env = os.environ.copy()
-                env['PYTHONPATH'] = os.getcwd()
-                env['PYTHONIOENCODING'] = 'utf-8'
-                env['PYTHONUNBUFFERED'] = '1'
-                env['MARCUS_RUN_ID'] = str(run_data['id'])
-                env['MARCUS_USER_ID'] = str(st.session_state.user.id)
-                env['MARCUS_ORG_ID'] = str(st.session_state.current_org_id)
+                # Spawn subprocess with minimal env allowlist (least privilege)
+                env = {
+                    'PATH': os.environ.get('PATH', ''),
+                    'SYSTEMROOT': os.environ.get('SYSTEMROOT', ''),
+                    'TEMP': os.environ.get('TEMP', ''),
+                    'TMP': os.environ.get('TMP', ''),
+                    'HOME': os.environ.get('HOME', os.environ.get('USERPROFILE', '')),
+                    'USERPROFILE': os.environ.get('USERPROFILE', ''),
+                    'APPDATA': os.environ.get('APPDATA', ''),
+                    'LOCALAPPDATA': os.environ.get('LOCALAPPDATA', ''),
+                    'PYTHONPATH': os.getcwd(),
+                    'PYTHONIOENCODING': 'utf-8',
+                    'PYTHONUNBUFFERED': '1',
+                    'OPENAI_API_KEY': os.environ.get('OPENAI_API_KEY', ''),
+                    'SUPABASE_URL': os.environ.get('SUPABASE_URL', ''),
+                    'MARCUS_RUN_ID': str(run_id),
+                    'MARCUS_USER_ID': str(st.session_state.user.id),
+                    'MARCUS_ORG_ID': str(st.session_state.current_org_id),
+                }
                 service_key = os.getenv('SUPABASE_SERVICE_KEY', '')
                 if service_key:
                     env['SUPABASE_SERVICE_KEY'] = service_key
 
-                log_file = open("agent_output.log", "w", encoding="utf-8")
+                # Close any previous log file to prevent leak
+                if hasattr(st.session_state, 'log_file') and st.session_state.log_file:
+                    try:
+                        st.session_state.log_file.close()
+                    except Exception:
+                        pass
+
+                log_file = open(run_file("agent_output.log", run_id), "w", encoding="utf-8")
                 process = subprocess.Popen(
                     [sys.executable, "-m", "browsing_agent"],
                     env=env,
@@ -606,9 +645,10 @@ with tab2:
 
             # Read enriched progress data
             prog_data = {}
-            if os.path.exists("progress.json"):
+            progress_file = run_file("progress.json", st.session_state.current_run_id)
+            if os.path.exists(progress_file):
                 try:
-                    with open("progress.json", "r", encoding='utf-8') as f:
+                    with open(progress_file, "r", encoding='utf-8') as f:
                         prog_data = json.load(f)
                 except Exception:
                     pass
@@ -650,9 +690,10 @@ with tab2:
             rc = st.session_state.last_return_code
 
             summary_text = ""
-            if os.path.exists("progress.json"):
+            completion_progress_file = run_file("progress.json", st.session_state.current_run_id)
+            if os.path.exists(completion_progress_file):
                 try:
-                    with open("progress.json", "r", encoding='utf-8') as f:
+                    with open(completion_progress_file, "r", encoding='utf-8') as f:
                         prog_final = json.load(f)
                     if prog_final.get("status") == "completed" and isinstance(prog_final.get("result"), dict):
                         p = prog_final["result"].get("passed", 0)
@@ -683,10 +724,11 @@ with tab3:
 
     if not completed_runs:
         # Fallback: check local file for in-progress results
-        if os.path.exists("test_results.json"):
+        local_results_file = run_file("test_results.json", st.session_state.current_run_id)
+        if os.path.exists(local_results_file):
             st.info("Showing results from current local execution")
             try:
-                with open("test_results.json", "r", encoding='utf-8') as f:
+                with open(local_results_file, "r", encoding='utf-8') as f:
                     results = json.load(f)
                 df = pd.DataFrame(results)
                 if not df.empty:
@@ -861,7 +903,7 @@ with tab4:
 
             report_lines = [
                 "<p><strong>Run</strong> <span style='color:var(--text-1);'>#{}</span></p>".format(selected_export_run['id']),
-                "<p><strong>URL</strong> <span style='color:var(--text-1);'>{}</span></p>".format(selected_export_run.get('url') or 'BRD Only'),
+                "<p><strong>URL</strong> <span style='color:var(--text-1);'>{}</span></p>".format(html.escape(selected_export_run.get('url') or 'BRD Only')),
                 "<p><strong>Total Tests</strong> <span style='color:var(--text-1);'>{}</span></p>".format(b["total"]),
                 "<p><strong>Passed</strong> <span style='color:var(--pass);'>{} ({:.1f}%)</span></p>".format(b["passed"], b["pass_rate"]),
                 "<p><strong>Failed</strong> <span style='color:var(--fail);'>{}</span></p>".format(b["failed"]),

@@ -603,4 +603,8 @@ def crawl_website(
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(_run_crawl_in_thread, crawler)
-        return future.result(timeout=crawl_timeout + 30)
+        try:
+            return future.result(timeout=crawl_timeout + 30)
+        except concurrent.futures.TimeoutError:
+            pool.shutdown(wait=False, cancel_futures=True)
+            raise TimeoutError(f"Crawl exceeded {crawl_timeout}s timeout")

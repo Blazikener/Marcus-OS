@@ -67,11 +67,19 @@ load_dotenv()
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 TEST_TIMEOUT = int(os.getenv("MARCUS_TEST_TIMEOUT", "180"))
+SUITE_TIMEOUT = int(os.getenv("MARCUS_SUITE_TIMEOUT", "3600"))
 
 # ─── Multi-tenancy: Supabase service client (bypasses RLS) ──────────────────
 MARCUS_RUN_ID = os.getenv("MARCUS_RUN_ID")
 MARCUS_USER_ID = os.getenv("MARCUS_USER_ID")
 MARCUS_ORG_ID = os.getenv("MARCUS_ORG_ID")
+
+
+def run_file(name: str) -> str:
+    """Return run-scoped filename: run_{id}_{name} or just {name} if no run_id."""
+    if MARCUS_RUN_ID:
+        return f"run_{MARCUS_RUN_ID}_{name}"
+    return name
 
 
 def ts() -> str:
@@ -104,7 +112,10 @@ def extract_json_from_text(text: str):
     Returns parsed dict or None.
     """
     start_idx = 0
-    while True:
+    max_attempts = 50
+    attempts = 0
+    while attempts < max_attempts:
+        attempts += 1
         start = text.find('{', start_idx)
         if start == -1:
             return None
@@ -234,7 +245,7 @@ def save_progress(current, total, status="running", result=None,
         "current_test_title": current_test_title,
         "test_elapsed_seconds": elapsed,
     }
-    atomic_json_write("progress.json", progress)
+    atomic_json_write(run_file("progress.json"), progress)
 
 
 async def execute_single_test(test: dict, test_id: int, total_tests: int,
@@ -245,6 +256,7 @@ async def execute_single_test(test: dict, test_id: int, total_tests: int,
     status = "ERROR"
     reason = "Unknown error"
     result_str = ""
+    result = None
 
     test_title = test.get('title', 'Unknown')
     print(f"[{ts()}][TEST {test_id}] Starting: {test_title}")
@@ -340,7 +352,7 @@ FAIL means the expected result was NOT observed.
             "status": status,
             "reason": reason,
             "final_url": final_url,
-            "execution_log": build_execution_log(result) if status != "TIMEOUT" else "TIMEOUT",
+            "execution_log": build_execution_log(result) if result and status != "TIMEOUT" else "TIMEOUT",
             "timestamp": datetime.now().isoformat()
         }
 
@@ -380,9 +392,10 @@ FAIL means the expected result was NOT observed.
 
 async def main():
     """Main orchestrator — sequential execution with per-test error isolation."""
-    if not os.path.exists("tests.json"):
-        print(f"[{ts()}][ERROR] tests.json not found!")
-        save_progress(0, 0, "error", "No tests.json")
+    tests_path = run_file("tests.json")
+    if not os.path.exists(tests_path):
+        print(f"[{ts()}][ERROR] {tests_path} not found!")
+        save_progress(0, 0, "error", f"No {tests_path}")
         return
 
     # Initialize Supabase service client (None if not available)
@@ -394,7 +407,7 @@ async def main():
         print(f"[{ts()}][SUPABASE] Not configured — running in local-only mode")
 
     try:
-        with open("tests.json", "r", encoding='utf-8') as f:
+        with open(tests_path, "r", encoding='utf-8') as f:
             tests = json.load(f)
         total_tests = len(tests)
         print(f"[{ts()}][START] Loaded {total_tests} tests (timeout: {TEST_TIMEOUT}s per test)")
@@ -406,7 +419,18 @@ async def main():
         return
 
     results = []
+    suite_start = time.time()
     for i, test in enumerate(tests):
+        # Suite timeout watchdog
+        if time.time() - suite_start > SUITE_TIMEOUT:
+            print(f"[{ts()}][TIMEOUT] Suite timeout ({SUITE_TIMEOUT}s) exceeded after {i}/{total_tests} tests")
+            save_progress(i, total_tests, "timeout", {
+                "passed": sum(1 for r in results if r['status'] == 'PASS'),
+                "failed": sum(1 for r in results if r['status'] == 'FAIL'),
+                "total": total_tests,
+            })
+            break
+
         test_title = test.get("title", "Unknown") if isinstance(test, dict) else "Unknown"
         test_start = time.time()
 
@@ -433,7 +457,7 @@ async def main():
         results.append(result)
 
         # Save locally (for live monitoring) — atomic write
-        atomic_json_write("test_results.json", results)
+        atomic_json_write(run_file("test_results.json"), results)
 
         # Save to Supabase
         save_result_to_supabase(supa, result)

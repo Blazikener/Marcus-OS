@@ -399,9 +399,9 @@ with tab1:
                         extracted = extract_website_intelligence(aggregated_html, url)
                 else:
                     with st.spinner("Scraping website..."):
-                        html = scrape_website(url)
+                        page_html = scrape_website(url)
                     with st.spinner("Analyzing page structure..."):
-                        extracted = extract_website_intelligence(html, url)
+                        extracted = extract_website_intelligence(page_html, url)
 
             # Dummy extracted for BRD-only mode
             if extracted is None:
@@ -439,10 +439,6 @@ with tab1:
             run_id = run_response.data[0]["id"]
             st.session_state.current_run_id = run_id
 
-            # Also write locally for subprocess
-            with open(run_file("tests.json", run_id), "w", encoding='utf-8') as f:
-                json.dump(tests, f, ensure_ascii=False, indent=2)
-
             sources_used = []
             if extracted.url:
                 sources_used.append("Web")
@@ -463,29 +459,35 @@ with tab1:
 
     # Show test metrics if tests were generated
     run_id = st.session_state.current_run_id
-    tests_file = run_file("tests.json", run_id)
-    if st.session_state.tests_generated and os.path.exists(tests_file):
-        with open(tests_file, "r", encoding="utf-8") as f:
-            tests = json.load(f)
+    if st.session_state.tests_generated and run_id:
+        try:
+            client = get_authenticated_client()
+            resp = client.table("test_runs").select("tests_json").eq("id", run_id).single().execute()
+            tests = resp.data["tests_json"]
+            if isinstance(tests, str):
+                tests = json.loads(tests)
+        except Exception:
+            tests = []
 
-        pos = sum(1 for t in tests if t.get("type") == "positive")
-        neg = sum(1 for t in tests if t.get("type") == "negative")
-        edge = sum(1 for t in tests if t.get("type") == "edge")
+        if tests:
+            pos = sum(1 for t in tests if t.get("type") == "positive")
+            neg = sum(1 for t in tests if t.get("type") == "negative")
+            edge = sum(1 for t in tests if t.get("type") == "edge")
 
-        st.markdown(stat_cards_html([
-            (len(tests), "Total Tests", "stat-purple"),
-            (pos, "Positive", "stat-green"),
-            (neg, "Negative", "stat-red"),
-            (edge, "Edge Cases", "stat-amber"),
-        ]), unsafe_allow_html=True)
+            st.markdown(stat_cards_html([
+                (len(tests), "Total Tests", "stat-purple"),
+                (pos, "Positive", "stat-green"),
+                (neg, "Negative", "stat-red"),
+                (edge, "Edge Cases", "stat-amber"),
+            ]), unsafe_allow_html=True)
 
-        st.markdown('<div class="section-header">Generated Test Cases</div>', unsafe_allow_html=True)
-        for tc in tests[:5]:
-            with st.expander("TC{:02d} - {} ({})".format(tc['id'], tc['title'], tc['type'].upper())):
-                st.markdown("**Expected:** {}".format(tc['expected_result']))
-                st.markdown("**Steps:**")
-                for i, step in enumerate(tc["steps"], 1):
-                    st.markdown("{}. {}".format(i, step))
+            st.markdown('<div class="section-header">Generated Test Cases</div>', unsafe_allow_html=True)
+            for tc in tests[:5]:
+                with st.expander("TC{:02d} - {} ({})".format(tc['id'], tc['title'], tc['type'].upper())):
+                    st.markdown("**Expected:** {}".format(tc['expected_result']))
+                    st.markdown("**Steps:**")
+                    for i, step in enumerate(tc["steps"], 1):
+                        st.markdown("{}. {}".format(i, step))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -558,10 +560,7 @@ with tab2:
                 jsonschema.validate(tests, TEST_SCHEMA)
                 st.success("{} tests validated".format(len(tests)))
 
-                # Write tests locally for the subprocess
                 run_id = run_data['id']
-                with open(run_file("tests.json", run_id), "w", encoding='utf-8') as f:
-                    json.dump(tests, f, ensure_ascii=False, indent=2)
 
                 # Spawn subprocess with minimal env allowlist (least privilege)
                 env = {
@@ -643,15 +642,25 @@ with tab2:
             st.markdown('<div class="monitor-card">', unsafe_allow_html=True)
             st.markdown('<div class="section-header" style="margin-top:0;border:none;padding-bottom:0.3rem;">Live Monitor &nbsp;<span class="badge badge-running">RUNNING</span></div>', unsafe_allow_html=True)
 
-            # Read enriched progress data
+            # Read progress from Supabase
             prog_data = {}
-            progress_file = run_file("progress.json", st.session_state.current_run_id)
-            if os.path.exists(progress_file):
-                try:
-                    with open(progress_file, "r", encoding='utf-8') as f:
-                        prog_data = json.load(f)
-                except Exception:
-                    pass
+            try:
+                client = get_authenticated_client()
+                response = client.table("test_runs") \
+                    .select("status, progress_current, progress_total, current_test_title, test_elapsed_seconds") \
+                    .eq("id", st.session_state.current_run_id) \
+                    .single() \
+                    .execute()
+                if response.data:
+                    prog_data = {
+                        "current": response.data.get("progress_current", 0),
+                        "total": response.data.get("progress_total", 0),
+                        "status": response.data.get("status", "running"),
+                        "current_test_title": response.data.get("current_test_title", "..."),
+                        "test_elapsed_seconds": response.data.get("test_elapsed_seconds"),
+                    }
+            except Exception:
+                pass  # Dashboard shows stale data on transient failure
 
             current_done = prog_data.get("current", 0)
             total_tests = prog_data.get("total", "?")
@@ -690,18 +699,18 @@ with tab2:
             rc = st.session_state.last_return_code
 
             summary_text = ""
-            completion_progress_file = run_file("progress.json", st.session_state.current_run_id)
-            if os.path.exists(completion_progress_file):
-                try:
-                    with open(completion_progress_file, "r", encoding='utf-8') as f:
-                        prog_final = json.load(f)
-                    if prog_final.get("status") == "completed" and isinstance(prog_final.get("result"), dict):
-                        p = prog_final["result"].get("passed", 0)
-                        f_count = prog_final["result"].get("failed", 0)
-                        t = prog_final["result"].get("total", 0)
+            try:
+                client = get_authenticated_client()
+                run_id = st.session_state.current_run_id
+                if run_id:
+                    results = get_run_results(run_id)
+                    if results:
+                        p = sum(1 for r in results if r.get("status") == "PASS")
+                        f_count = sum(1 for r in results if r.get("status") == "FAIL")
+                        t = len(results)
                         summary_text = " — {}/{} passed, {} failed".format(p, t, f_count)
-                except Exception:
-                    pass
+            except Exception:
+                pass
 
             if rc == 0:
                 st.success("Execution completed successfully{}. View results in the Results tab.".format(summary_text))
@@ -723,32 +732,28 @@ with tab3:
     completed_runs = [r for r in org_runs if r.get("status") == "completed"]
 
     if not completed_runs:
-        # Fallback: check local file for in-progress results
-        local_results_file = run_file("test_results.json", st.session_state.current_run_id)
-        if os.path.exists(local_results_file):
-            st.info("Showing results from current local execution")
-            try:
-                with open(local_results_file, "r", encoding='utf-8') as f:
-                    results = json.load(f)
-                df = pd.DataFrame(results)
-                if not df.empty:
-                    b = compute_status_breakdown(df)
+        # Check for in-progress results in Supabase
+        run_id = st.session_state.current_run_id
+        in_progress_results = get_run_results(run_id) if run_id else []
+        if in_progress_results:
+            st.info("Showing results from current execution")
+            df = pd.DataFrame(in_progress_results)
+            if not df.empty:
+                b = compute_status_breakdown(df)
 
-                    cards = [
-                        (b["total"], "Total Tests", "stat-purple"),
-                        (b["passed"], "Passed", "stat-green"),
-                        (b["failed"], "Failed", "stat-red"),
-                    ]
-                    if b["timeout"] > 0:
-                        cards.append((b["timeout"], "Timeout", "stat-amber"))
-                    if b["errors"] + b["json_err"] > 0:
-                        cards.append((b["errors"] + b["json_err"], "Errors", "stat-amber"))
-                    cards.append(("{:.0f}%".format(b["pass_rate"]), "Pass Rate", "stat-blue"))
-                    st.markdown(stat_cards_html(cards), unsafe_allow_html=True)
+                cards = [
+                    (b["total"], "Total Tests", "stat-purple"),
+                    (b["passed"], "Passed", "stat-green"),
+                    (b["failed"], "Failed", "stat-red"),
+                ]
+                if b["timeout"] > 0:
+                    cards.append((b["timeout"], "Timeout", "stat-amber"))
+                if b["errors"] + b["json_err"] > 0:
+                    cards.append((b["errors"] + b["json_err"], "Errors", "stat-amber"))
+                cards.append(("{:.0f}%".format(b["pass_rate"]), "Pass Rate", "stat-blue"))
+                st.markdown(stat_cards_html(cards), unsafe_allow_html=True)
 
-                    render_results_table(df)
-            except Exception as e:
-                st.error("Cannot parse local results: {}".format(e))
+                render_results_table(df)
         else:
             st.markdown("""
             <div class="empty-state">

@@ -75,35 +75,9 @@ MARCUS_USER_ID = os.getenv("MARCUS_USER_ID")
 MARCUS_ORG_ID = os.getenv("MARCUS_ORG_ID")
 
 
-def run_file(name: str) -> str:
-    """Return run-scoped filename: run_{id}_{name} or just {name} if no run_id."""
-    if MARCUS_RUN_ID:
-        return f"run_{MARCUS_RUN_ID}_{name}"
-    return name
-
-
 def ts() -> str:
     """Timestamp for log output."""
     return datetime.now().strftime('%H:%M:%S')
-
-
-def atomic_json_write(filepath: str, data):
-    """Write JSON atomically: temp file + os.replace (safe on Windows)."""
-    dir_name = os.path.dirname(os.path.abspath(filepath))
-    try:
-        fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.tmp', prefix='.marcus_')
-        try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-            os.replace(tmp_path, filepath)
-        except Exception:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-            raise
-    except (IOError, OSError, TypeError, ValueError) as e:
-        print(f"[{ts()}][IO] Atomic write failed for {filepath}: {e}")
 
 
 def extract_json_from_text(text: str):
@@ -216,36 +190,27 @@ def save_result_to_supabase(supa, result: dict):
         print(f"[{ts()}][SUPABASE] Failed to save result: {e}")
 
 
-def update_run_status(supa, status: str):
-    """Update the test_runs row status in Supabase."""
+def save_progress(supa, current, total, status="running",
+                  current_test_title=None, test_start_time=None):
+    """Save real-time progress to Supabase test_runs row."""
     if not supa or not MARCUS_RUN_ID:
         return
-    try:
-        supa.table("test_runs").update({
-            "status": status,
-            "updated_at": datetime.now().isoformat(),
-        }).eq("id", int(MARCUS_RUN_ID)).execute()
-    except Exception as e:
-        print(f"[{ts()}][SUPABASE] Failed to update run status: {e}")
-
-
-def save_progress(current, total, status="running", result=None,
-                  current_test_title=None, test_start_time=None):
-    """Save real-time progress for Streamlit dashboard."""
     elapsed = None
     if test_start_time is not None:
         elapsed = round(time.time() - test_start_time, 1)
 
-    progress = {
-        "timestamp": datetime.now().isoformat(),
-        "current": current,
-        "total": total,
+    update_data = {
         "status": status,
-        "result": result,
+        "progress_current": current,
+        "progress_total": total,
         "current_test_title": current_test_title,
         "test_elapsed_seconds": elapsed,
+        "updated_at": datetime.now().isoformat(),
     }
-    atomic_json_write(run_file("progress.json"), progress)
+    try:
+        supa.table("test_runs").update(update_data).eq("id", int(MARCUS_RUN_ID)).execute()
+    except Exception as e:
+        print(f"[{ts()}][SUPABASE] Failed to save progress: {e}")
 
 
 async def execute_single_test(test: dict, test_id: int, total_tests: int,
@@ -392,30 +357,26 @@ FAIL means the expected result was NOT observed.
 
 async def main():
     """Main orchestrator — sequential execution with per-test error isolation."""
-    tests_path = run_file("tests.json")
-    if not os.path.exists(tests_path):
-        print(f"[{ts()}][ERROR] {tests_path} not found!")
-        save_progress(0, 0, "error", f"No {tests_path}")
+    supa = get_service_client()
+    if not supa or not MARCUS_RUN_ID:
+        print(f"[{ts()}][ERROR] Supabase not configured or MARCUS_RUN_ID missing")
         return
 
-    # Initialize Supabase service client (None if not available)
-    supa = get_service_client()
-    if supa and MARCUS_RUN_ID:
-        print(f"[{ts()}][SUPABASE] Connected. Run ID: {MARCUS_RUN_ID}")
-        update_run_status(supa, "running")
-    else:
-        print(f"[{ts()}][SUPABASE] Not configured — running in local-only mode")
+    print(f"[{ts()}][SUPABASE] Connected. Run ID: {MARCUS_RUN_ID}")
+    save_progress(supa, 0, 0, "running")
 
+    # Fetch tests from Supabase
     try:
-        with open(tests_path, "r", encoding='utf-8') as f:
-            tests = json.load(f)
+        response = supa.table("test_runs").select("tests_json").eq("id", int(MARCUS_RUN_ID)).single().execute()
+        tests = response.data["tests_json"]
+        if isinstance(tests, str):
+            tests = json.loads(tests)
         total_tests = len(tests)
-        print(f"[{ts()}][START] Loaded {total_tests} tests (timeout: {TEST_TIMEOUT}s per test)")
-        save_progress(0, total_tests, "ready", None)
+        print(f"[{ts()}][START] Loaded {total_tests} tests from Supabase (timeout: {TEST_TIMEOUT}s per test)")
+        save_progress(supa, 0, total_tests, "ready")
     except Exception as e:
-        print(f"[{ts()}][ERROR] Loading tests: {e}")
-        save_progress(0, 0, "error", str(e))
-        update_run_status(supa, "failed")
+        print(f"[{ts()}][ERROR] Loading tests from Supabase: {e}")
+        save_progress(supa, 0, 0, "failed")
         return
 
     results = []
@@ -424,18 +385,14 @@ async def main():
         # Suite timeout watchdog
         if time.time() - suite_start > SUITE_TIMEOUT:
             print(f"[{ts()}][TIMEOUT] Suite timeout ({SUITE_TIMEOUT}s) exceeded after {i}/{total_tests} tests")
-            save_progress(i, total_tests, "timeout", {
-                "passed": sum(1 for r in results if r['status'] == 'PASS'),
-                "failed": sum(1 for r in results if r['status'] == 'FAIL'),
-                "total": total_tests,
-            })
+            save_progress(supa, i, total_tests, "timeout")
             break
 
         test_title = test.get("title", "Unknown") if isinstance(test, dict) else "Unknown"
         test_start = time.time()
 
         print(f"\n[{ts()}][=== TEST {i + 1}/{total_tests} ===]")
-        save_progress(i, total_tests, "running", None,
+        save_progress(supa, i, total_tests, "running",
                       current_test_title=test_title, test_start_time=test_start)
 
         # Error isolation: one bad test cannot crash remaining tests
@@ -456,14 +413,11 @@ async def main():
 
         results.append(result)
 
-        # Save locally (for live monitoring) — atomic write
-        atomic_json_write(run_file("test_results.json"), results)
-
         # Save to Supabase
         save_result_to_supabase(supa, result)
 
         loop_status = "running" if i < total_tests - 1 else "completed"
-        save_progress(i + 1, total_tests, loop_status, result,
+        save_progress(supa, i + 1, total_tests, loop_status,
                       current_test_title=test_title if loop_status == "running" else None,
                       test_start_time=test_start if loop_status == "running" else None)
         print(f"[{ts()}][PROGRESS] {i + 1}/{total_tests} - {result['status']}")
@@ -472,12 +426,7 @@ async def main():
     passed = sum(1 for r in results if r['status'] == 'PASS')
     failed = sum(1 for r in results if r['status'] == 'FAIL')
     print(f"\n[{ts()}][DONE] {passed}/{total_tests} passed, {failed} failed")
-    update_run_status(supa, "completed")
-    save_progress(total_tests, total_tests, "completed", {
-        "passed": passed,
-        "failed": failed,
-        "total": total_tests
-    })
+    save_progress(supa, total_tests, total_tests, "completed")
 
 
 if __name__ == "__main__":

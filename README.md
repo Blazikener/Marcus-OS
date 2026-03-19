@@ -6,8 +6,6 @@ Marcus-OS is an open-source playground for experiments, templates, and tooling a
 
 This repository now includes the powerful **FastAPI + Celery + MongoDB** backend service, integrated alongside our AI Agents.
 
----
-
 ## 🛠️ Components
 
 ### 1. AI Webscraper & Agents (Root)
